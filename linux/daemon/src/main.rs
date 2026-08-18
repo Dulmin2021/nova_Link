@@ -1,4 +1,5 @@
 pub mod ipc;
+pub mod notifications;
 
 use std::collections::HashMap;
 use std::net::SocketAddr;
