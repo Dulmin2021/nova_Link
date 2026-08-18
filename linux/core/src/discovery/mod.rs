@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use std::net::IpAddr;
 use std::time::{Duration, Instant};
+use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 use crate::protocol::DeviceType;
 
@@ -8,7 +9,7 @@ pub const SERVICE_TYPE: &str = "_nova-link._tcp.local.";
 pub const DEFAULT_PORT: u16 = 42424;
 pub const DEFAULT_PEER_TTL: Duration = Duration::from_secs(60);
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct DiscoveredDevice {
     pub device_id: Uuid,
     pub device_name: String,
@@ -20,7 +21,7 @@ pub struct DiscoveredDevice {
     pub public_key_fingerprint: Option<String>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ServiceAttributes {
     pub device_id: Uuid,
     pub device_name: String,
