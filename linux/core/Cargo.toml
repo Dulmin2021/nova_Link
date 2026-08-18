@@ -9,6 +9,7 @@ description = "Core protocol, networking, security, and state machine library fo
 [dependencies]
 tokio.workspace = true
 tokio-util.workspace = true
+futures-util = "0.3"
 bytes.workspace = true
 serde.workspace = true
 serde_json.workspace = true

@@ -101,3 +101,12 @@ data class TransferInitPayload(
     @SerialName("mime_type")
     val mimeType: String? = null
 )
+
+@Serializable
+class EmptyPayload
+
+@Serializable
+data class ErrorPayload(
+    val code: String,
+    val message: String
+)

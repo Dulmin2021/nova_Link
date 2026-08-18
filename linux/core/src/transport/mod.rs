@@ -1,11 +1,12 @@
+pub mod session;
+
+use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::sync::Arc;
-use tokio::net::{TcpListener, TcpStream};
-use tokio::sync::Mutex;
-use tokio_util::codec::Framed;
+use tokio::net::TcpListener;
+use tokio::sync::RwLock;
 use uuid::Uuid;
 use crate::error::{NovaError, NovaResult};
-use crate::protocol::{NovaFrameCodec, RawFrame};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ConnectionState {
@@ -16,26 +17,31 @@ pub enum ConnectionState {
     Failed,
 }
 
-pub struct PeerConnection {
-    pub peer_id: Option<Uuid>,
-    pub remote_addr: SocketAddr,
-    pub state: ConnectionState,
-    framed: Arc<Mutex<Framed<TcpStream, NovaFrameCodec>>>,
+pub use session::TransportSession;
+
+pub struct SessionManager {
+    sessions: Arc<RwLock<HashMap<Uuid, SocketAddr>>>,
 }
 
-impl PeerConnection {
-    pub fn new(stream: TcpStream, remote_addr: SocketAddr) -> Self {
-        let framed = Framed::new(stream, NovaFrameCodec::default());
+impl SessionManager {
+    pub fn new() -> Self {
         Self {
-            peer_id: None,
-            remote_addr,
-            state: ConnectionState::Connected,
-            framed: Arc::new(Mutex::new(framed)),
+            sessions: Arc::new(RwLock::new(HashMap::new())),
         }
     }
 
-    pub async fn connect(addr: SocketAddr) -> NovaResult<Self> {
-        let stream = TcpStream::connect(addr).await?;
-        Ok(Self::new(stream, addr))
+    pub async fn register(&self, session_id: Uuid, addr: SocketAddr) {
+        let mut map = self.sessions.write().await;
+        map.insert(session_id, addr);
+    }
+
+    pub async fn unregister(&self, session_id: &Uuid) {
+        let mut map = self.sessions.write().await;
+        map.remove(session_id);
+    }
+
+    pub async fn count(&self) -> usize {
+        let map = self.sessions.read().await;
+        map.len()
     }
 }

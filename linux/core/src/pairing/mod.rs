@@ -4,6 +4,7 @@ use rand::RngCore;
 use sha2::{Digest, Sha256};
 use x25519_dalek::{EphemeralSecret, PublicKey as X25519PublicKey};
 use crate::error::{NovaError, NovaResult};
+use crate::identity::{hex_decode, hex_encode, DeviceIdentity};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PairingState {
@@ -22,6 +23,7 @@ pub struct PairingSession {
     pub peer_ephemeral_pubkey: Option<[u8; 32]>,
     pub peer_nonce: Option<[u8; 32]>,
     pub shared_secret: Option<[u8; 32]>,
+    pub transcript_hash: Option<[u8; 32]>,
     pub sas_code: Option<String>,
     pub state: PairingState,
 }
@@ -42,6 +44,7 @@ impl PairingSession {
             peer_ephemeral_pubkey: None,
             peer_nonce: None,
             shared_secret: None,
+            transcript_hash: None,
             sas_code: None,
             state: PairingState::Idle,
         }
@@ -76,7 +79,8 @@ impl PairingSession {
         hasher.update(&self.local_nonce);
         hasher.update(&peer_nonce);
         hasher.update(&shared_secret_bytes);
-        let transcript_hash = hasher.finalize();
+        let transcript_hash: [u8; 32] = hasher.finalize().into();
+        self.transcript_hash = Some(transcript_hash);
 
         // Derive SAS via HKDF
         let hk = Hkdf::<Sha256>::new(None, &transcript_hash);
@@ -94,6 +98,29 @@ impl PairingSession {
 
         Ok(formatted_sas)
     }
+
+    pub fn generate_confirmation_token(&self, role_tag: &[u8]) -> NovaResult<[u8; 32]> {
+        let transcript_hash = self
+            .transcript_hash
+            .as_ref()
+            .ok_or_else(|| NovaError::Pairing("Transcript hash not yet computed".into()))?;
+
+        let hk = Hkdf::<Sha256>::new(None, transcript_hash);
+        let mut token = [0u8; 32];
+        hk.expand(role_tag, &mut token)
+            .map_err(|_| NovaError::Crypto("HKDF confirmation expansion failed".into()))?;
+        Ok(token)
+    }
+
+    pub fn verify_peer_confirmation(
+        &self,
+        peer_identity_pk_hex: &str,
+        peer_signature_hex: &str,
+        peer_role_tag: &[u8],
+    ) -> NovaResult<bool> {
+        let token = self.generate_confirmation_token(peer_role_tag)?;
+        DeviceIdentity::verify_signature(peer_identity_pk_hex, &token, peer_signature_hex)
+    }
 }
 
 #[cfg(test)]
@@ -101,34 +128,55 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_mutual_sas_derivation() {
+    fn test_full_pairing_handshake_flow() {
+        let id_a = DeviceIdentity::generate_ephemeral("Fedora Host");
+        let id_b = DeviceIdentity::generate_ephemeral("Android Phone");
+
         let mut session_a = PairingSession::new();
         let mut session_b = PairingSession::new();
 
-        let id_a = [1u8; 32];
-        let id_b = [2u8; 32];
+        let mut id_a_pk = [0u8; 32];
+        let mut id_b_pk = [0u8; 32];
+        id_a_pk.copy_from_slice(&hex_decode(&id_a.public_key_hex).unwrap());
+        id_b_pk.copy_from_slice(&hex_decode(&id_b.public_key_hex).unwrap());
 
-        // Session A computes SAS with B's public params
+        // Step 1: Both calculate SAS
         let sas_a = session_a
             .compute_sas(
-                &id_a,
-                &id_b,
+                &id_a_pk,
+                &id_b_pk,
                 session_b.local_ephemeral_pubkey,
                 session_b.local_nonce,
             )
-            .expect("Session A SAS derivation should succeed");
+            .expect("Session A SAS computation");
 
-        // Session B computes SAS with A's public params
         let sas_b = session_b
             .compute_sas(
-                &id_a,
-                &id_b,
+                &id_a_pk,
+                &id_b_pk,
                 session_a.local_ephemeral_pubkey,
                 session_a.local_nonce,
             )
-            .expect("Session B SAS derivation should succeed");
+            .expect("Session B SAS computation");
 
-        assert_eq!(sas_a, sas_b, "Both sides must derive identical SAS verification codes");
-        assert_eq!(sas_a.len(), 7); // "XXX XXX"
+        assert_eq!(sas_a, sas_b);
+
+        // Step 2: Confirmation tokens
+        let confirm_a_token = session_a.generate_confirmation_token(b"CONFIRM-A").unwrap();
+        let sig_a = id_a.sign_message(&confirm_a_token).unwrap();
+
+        let confirm_b_token = session_b.generate_confirmation_token(b"CONFIRM-B").unwrap();
+        let sig_b = id_b.sign_message(&confirm_b_token).unwrap();
+
+        // Step 3: Mutual verification
+        let verified_on_b = session_b
+            .verify_peer_confirmation(&id_a.public_key_hex, &sig_a, b"CONFIRM-A")
+            .unwrap();
+        let verified_on_a = session_a
+            .verify_peer_confirmation(&id_b.public_key_hex, &sig_b, b"CONFIRM-B")
+            .unwrap();
+
+        assert!(verified_on_b, "B must verify A's confirmation signature");
+        assert!(verified_on_a, "A must verify B's confirmation signature");
     }
 }
