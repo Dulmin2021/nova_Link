@@ -1,0 +1,15 @@
+Source: nova-link
+Section: utils
+Priority: optional
+Maintainer: NOVA-Link Contributors <dev@novalink.org>
+Build-Depends: debhelper-compat (= 13), cargo, rustc, libgtk-4-dev, libadwaita-1-dev, libavahi-client-dev, libssl-dev, pkg-config
+Standards-Version: 4.6.2
+Homepage: https://github.com/Dulmin2021/nova_Link
+
+Package: nova-link
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}, avahi-daemon
+Description: Secure local-first Android and Linux connectivity platform
+ NOVA-Link enables fast, local network communication between Linux
+ desktops and Android devices, including streaming file transfers,
+ clipboard synchronization, and instant URL/text sharing.

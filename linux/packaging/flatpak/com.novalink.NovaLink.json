@@ -1,0 +1,44 @@
+{
+  "app-id": "com.novalink.NovaLink",
+  "runtime": "org.gnome.Platform",
+  "runtime-version": "46",
+  "sdk": "org.gnome.Sdk",
+  "sdk-extensions": [
+    "org.freedesktop.Sdk.Extension.rust-stable"
+  ],
+  "command": "nova-desktop",
+  "finish-args": [
+    "--share=ipc",
+    "--share=network",
+    "--socket=fallback-x11",
+    "--socket=wayland",
+    "--system-talk-name=org.freedesktop.Avahi",
+    "--talk-name=org.freedesktop.Notifications",
+    "--filesystem=xdg-download/NOVA-Link:create"
+  ],
+  "build-options": {
+    "append-path": "/usr/lib/sdk/rust-stable/bin",
+    "env": {
+      "CARGO_HOME": "/run/build/nova-link/cargo"
+    }
+  },
+  "modules": [
+    {
+      "name": "nova-link",
+      "buildsystem": "simple",
+      "build-commands": [
+        "cargo --offline fetch --manifest-path linux/Cargo.toml",
+        "cargo --offline build --release --manifest-path linux/Cargo.toml",
+        "install -Dm755 linux/target/release/nova-daemon /app/bin/nova-daemon",
+        "install -Dm755 linux/target/release/nova-desktop /app/bin/nova-desktop",
+        "install -Dm644 linux/packaging/com.novalink.NovaLink.desktop /app/share/applications/com.novalink.NovaLink.desktop"
+      ],
+      "sources": [
+        {
+          "type": "dir",
+          "path": "../../"
+        }
+      ]
+    }
+  ]
+}

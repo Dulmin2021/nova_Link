@@ -1,0 +1,26 @@
+# Maintainer: NOVA-Link Contributors <dev@novalink.org>
+pkgname=nova-link
+pkgver=0.1.0
+pkgrel=1
+pkgdesc="Secure local-first Android and Linux connectivity platform"
+arch=('x86_64' 'aarch64')
+url="https://github.com/Dulmin2021/nova_Link"
+license=('MIT')
+depends=('gtk4' 'libadwaita' 'avahi' 'openssl')
+makedepends=('rust' 'cargo' 'pkgconf')
+source=("$pkgname-$pkgver.tar.gz::$url/archive/v$pkgver.tar.gz")
+sha256sums=('SKIP')
+
+build() {
+    cd "$srcdir/$pkgname-$pkgver/linux"
+    cargo build --release --locked --workspace
+}
+
+package() {
+    cd "$srcdir/$pkgname-$pkgver"
+    install -Dm755 "linux/target/release/nova-daemon" "$pkgdir/usr/bin/nova-daemon"
+    install -Dm755 "linux/target/release/nova-desktop" "$pkgdir/usr/bin/nova-desktop"
+    install -Dm644 "linux/packaging/nova-link.service" "$pkgdir/usr/lib/systemd/user/nova-link.service"
+    install -Dm644 "linux/packaging/com.novalink.NovaLink.desktop" "$pkgdir/usr/share/applications/com.novalink.NovaLink.desktop"
+    install -Dm644 "LICENSE" "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+}
