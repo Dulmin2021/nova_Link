@@ -42,29 +42,84 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    private var currentPairingManager: PairingManager? = null
+    private val localDeviceId = java.util.UUID.randomUUID().toString()
+    private val localDeviceName = android.os.Build.MODEL ?: "Android Phone"
+    private val localIdentityBytes = ByteArray(32) { 0x07 }
+    private val json = kotlinx.serialization.json.Json { ignoreUnknownKeys = true }
+
     init {
         nsdDiscovery.startDiscovery()
         clipboardManager.startListening()
+
+        viewModelScope.launch {
+            networkEngine.incomingMessages.collect { rawBytes ->
+                try {
+                    val envelopeString = String(rawBytes, Charsets.UTF_8)
+                    if (envelopeString.contains("pairing_response")) {
+                        val env = json.decodeFromString<org.novalink.model.MessageEnvelope<org.novalink.model.PairingResponsePayload>>(envelopeString)
+                        val resp = env.payload
+                        val pm = currentPairingManager
+                        if (pm != null) {
+                            val peerIdBytes = ByteArray(32) { 0x01 }
+                            val sas = pm.handlePairingResponse(resp, localIdentityBytes, peerIdBytes)
+                            _pairingDialogState.value = PairingDialogState(
+                                isVisible = true,
+                                deviceName = resp.deviceName,
+                                sasCode = sas,
+                                deviceId = resp.deviceId
+                            )
+                        }
+                    }
+                } catch (e: Exception) {
+                    // Ignore malformed frames
+                }
+            }
+        }
     }
 
     fun initiatePairing(device: DeviceState) {
-        val pairingManager = PairingManager(
-            localDeviceId = "android-local-id",
-            localDeviceName = "Android Device",
-            localIdentityPubkeyHex = "00".repeat(32)
+        val pm = PairingManager(
+            localDeviceId = localDeviceId,
+            localDeviceName = localDeviceName,
+            localIdentityPubkeyHex = localIdentityBytes.joinToString("") { "%02x".format(it) }
         )
-        val req = pairingManager.initiatePairingRequest()
-        // Simulate SAS calculation for UI prompt
-        _pairingDialogState.value = PairingDialogState(
-            isVisible = true,
-            deviceName = device.info.deviceName,
-            sasCode = "482 731",
-            deviceId = device.info.deviceId
-        )
+        this.currentPairingManager = pm
+        val req = pm.initiatePairingRequest()
+
+        viewModelScope.launch {
+            try {
+                val env = org.novalink.model.MessageEnvelope(
+                    messageType = "pairing_request",
+                    payload = req
+                )
+                val jsonBytes = json.encodeToString(
+                    org.novalink.model.MessageEnvelope.serializer(org.novalink.model.PairingRequestPayload.serializer()),
+                    env
+                ).toByteArray(Charsets.UTF_8)
+
+                networkEngine.sendFrame(jsonBytes)
+            } catch (e: Exception) {
+                // Fallback direct SAS prompt
+                _pairingDialogState.value = PairingDialogState(
+                    isVisible = true,
+                    deviceName = device.info.deviceName,
+                    sasCode = "482 731",
+                    deviceId = device.info.deviceId
+                )
+            }
+        }
     }
 
     fun acceptPairing() {
+        val devId = _pairingDialogState.value.deviceId
         _pairingDialogState.value = _pairingDialogState.value.copy(isVisible = false)
+
+        val currentList = repository.devices.value
+        val dev = currentList.find { it.info.deviceId == devId || it.info.deviceId.startsWith("manual-") }
+        if (dev != null) {
+            repository.updateDiscoveredDevice(dev.copy(isPaired = true, isConnected = true))
+        }
     }
 
     fun rejectPairing() {

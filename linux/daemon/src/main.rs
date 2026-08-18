@@ -59,19 +59,107 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let tcp_listener = TcpListener::bind(bind_addr).await?;
     info!(addr = %bind_addr, "TCP transport listener active");
 
-    let _tcp_state = Arc::clone(&state);
+    let tcp_state = Arc::clone(&state);
     tokio::spawn(async move {
         loop {
             match tcp_listener.accept().await {
                 Ok((socket, remote_addr)) => {
-                    info!(remote = %remote_addr, "Incoming TCP connection accepted");
+                    info!(remote = %remote_addr, "Incoming TCP connection accepted from client");
                     let mut session = TransportSession::new(socket, remote_addr);
-                    let _session_id = session.session_id;
+                    let st = Arc::clone(&tcp_state);
 
                     tokio::spawn(async move {
+                        use nova_core::protocol::{
+                            DeviceInfoPayload, DeviceType, MessageEnvelope, PairingRequestPayload,
+                            PairingResponsePayload,
+                        };
+                        use nova_core::discovery::DiscoveredDevice;
+                        use nova_core::pairing::PairingSession;
+                        use crate::notifications::DesktopNotifier;
+
+                        let mut pairing_session = PairingSession::new();
+
                         while let Ok(Some(frame)) = session.receive_raw_frame().await {
-                            // Process incoming protocol frames
-                            info!(len = frame.payload.len(), "Frame received");
+                            if let Ok(env) = serde_json::from_slice::<MessageEnvelope<serde_json::Value>>(&frame.payload) {
+                                info!(msg_type = %env.message_type, "Received protocol envelope");
+
+                                match env.message_type.as_str() {
+                                    "pairing_request" => {
+                                        if let Ok(req) = serde_json::from_value::<PairingRequestPayload>(env.payload.clone()) {
+                                            info!(device = %req.device_name, id = %req.device_id, "Processing pairing request from mobile");
+
+                                            // Register mobile device in peer tracker so desktop UI displays it
+                                            {
+                                                let mut guard = st.write().await;
+                                                guard.peer_tracker.update(DiscoveredDevice {
+                                                    device_id: req.device_id,
+                                                    device_name: req.device_name.clone(),
+                                                    device_type: DeviceType::Android,
+                                                    ip_addresses: vec![remote_addr.ip()],
+                                                    port: remote_addr.port(),
+                                                    protocol_version: 1,
+                                                    capabilities: vec!["file_transfer".into(), "clipboard".into(), "url_share".into()],
+                                                    public_key_fingerprint: Some(req.identity_pubkey.clone()),
+                                                });
+                                            }
+
+                                            // Compute SAS
+                                            let guard = st.read().await;
+                                            let mut local_id = [0u8; 32];
+                                            if let Some(ref sk) = guard.identity.signing_key {
+                                                local_id.copy_from_slice(sk.verifying_key().as_bytes());
+                                            }
+                                            let mut peer_id = [0u8; 32];
+                                            if let Ok(bytes) = nova_core::identity::hex_decode(&req.identity_pubkey) {
+                                                if bytes.len() == 32 { peer_id.copy_from_slice(&bytes); }
+                                            }
+                                            let mut peer_eph = [0u8; 32];
+                                            if let Ok(bytes) = nova_core::identity::hex_decode(&req.ephemeral_pubkey) {
+                                                if bytes.len() == 32 { peer_eph.copy_from_slice(&bytes); }
+                                            }
+                                            let mut peer_nonce = [0u8; 32];
+                                            if let Ok(bytes) = nova_core::identity::hex_decode(&req.nonce) {
+                                                if bytes.len() == 32 { peer_nonce.copy_from_slice(&bytes); }
+                                            }
+
+                                            if let Ok(sas) = pairing_session.compute_sas(&local_id, &peer_id, peer_eph, peer_nonce) {
+                                                info!(sas_code = %sas, "================================================");
+                                                info!(sas_code = %sas, ">>> NOVA-LINK PAIRING VERIFICATION CODE: {} <<<", sas);
+                                                info!(sas_code = %sas, "================================================");
+
+                                                DesktopNotifier::notify_pairing_request(&req.device_name, &sas);
+
+                                                // Send pairing response
+                                                let resp = PairingResponsePayload {
+                                                    device_id: guard.identity.device_id,
+                                                    device_name: guard.identity.device_name.clone(),
+                                                    device_type: DeviceType::Linux,
+                                                    identity_pubkey: guard.identity.public_key_hex.clone(),
+                                                    ephemeral_pubkey: nova_core::identity::hex_encode(pairing_session.local_ephemeral_pubkey),
+                                                    nonce: nova_core::identity::hex_encode(pairing_session.local_nonce),
+                                                };
+                                                let _ = session.send_message("pairing_response", resp).await;
+                                            }
+                                        }
+                                    }
+                                    "device_info" => {
+                                        if let Ok(info) = serde_json::from_value::<DeviceInfoPayload>(env.payload) {
+                                            let mut guard = st.write().await;
+                                            guard.peer_tracker.update(DiscoveredDevice {
+                                                device_id: info.device_id,
+                                                device_name: info.device_name,
+                                                device_type: info.device_type,
+                                                ip_addresses: vec![remote_addr.ip()],
+                                                port: remote_addr.port(),
+                                                protocol_version: info.protocol_version,
+                                                capabilities: info.capabilities,
+                                                public_key_fingerprint: None,
+                                            });
+                                        }
+                                    }
+                                    _ => {}
+                                }
+                            }
                         }
                     });
                 }

@@ -18,6 +18,8 @@ class MainActivity : ComponentActivity() {
         setContent {
             NOVALinkTheme {
                 val devices by viewModel.repository.devices.collectAsState()
+                val pairingState by viewModel.pairingDialogState.collectAsState()
+
                 HomeScreen(
                     devices = devices,
                     onPairClicked = { viewModel.initiatePairing(it) },
@@ -25,6 +27,15 @@ class MainActivity : ComponentActivity() {
                     onSendTextClicked = { /* Handle text input */ },
                     onDirectConnect = { ip, port -> viewModel.connectDirect(ip, port) }
                 )
+
+                if (pairingState.isVisible) {
+                    org.novalink.ui.screens.PairingDialog(
+                        deviceName = pairingState.deviceName,
+                        sasCode = pairingState.sasCode,
+                        onAccept = { viewModel.acceptPairing() },
+                        onReject = { viewModel.rejectPairing() }
+                    )
+                }
             }
         }
     }
