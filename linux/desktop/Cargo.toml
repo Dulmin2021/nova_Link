@@ -1,0 +1,13 @@
+[package]
+name = "nova-desktop"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+description = "Desktop UI frontend for NOVA-Link on Linux"
+
+[dependencies]
+nova-core = { path = "../core" }
+tokio.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true

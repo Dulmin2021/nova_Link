@@ -1,0 +1,40 @@
+# Rust / Cargo
+linux/target/
+linux/**/target/
+target/
+**/*.rs.bk
+*.pdb
+
+# Android / Gradle
+.gradle/
+build/
+android/.gradle/
+android/build/
+android/*/build/
+android/local.properties
+android/.cxx/
+*.apk
+*.aab
+
+# IntelliJ / Android Studio / VS Code
+.idea/
+*.iml
+.vscode/
+*.swp
+*~
+.DS_Store
+Thumbs.db
+
+# NOVA-Link runtime & test artifacts
+*.log
+*.sqlite
+*.key
+*.cert
+*.pem
+/tmp/
+
+# OS Packaging build files
+linux/packaging/build/
+linux/packaging/*.rpm
+linux/packaging/*.deb
+linux/packaging/.flatpak-builder/

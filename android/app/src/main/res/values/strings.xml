@@ -1,0 +1,9 @@
+<resources>
+    <string name="app_name">NOVA-Link</string>
+    <string name="title_devices">Nearby Devices</string>
+    <string name="action_pair">Pair</string>
+    <string name="action_send_file">Send File</string>
+    <string name="action_send_text">Send Text</string>
+    <string name="status_connected">Connected</string>
+    <string name="status_available">Available to Pair</string>
+</resources>

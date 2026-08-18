@@ -1,0 +1,21 @@
+[Unit]
+Description=NOVA-Link Background Connectivity Daemon
+Documentation=https://github.com/nova-link/nova-link
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/nova-daemon
+Restart=on-failure
+RestartSec=5s
+Environment=RUST_LOG=info
+
+# Sandboxing & Hardening
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=%h/Downloads/NOVA-Link %h/.config/nova-link
+PrivateTmp=true
+NoNewPrivileges=true
+
+[Install]
+WantedBy=default.target

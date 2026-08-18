@@ -1,0 +1,11 @@
+[Desktop Entry]
+Name=NOVA-Link
+GenericName=Device Connectivity
+Comment=Secure local-first Android & Linux connectivity platform
+Exec=nova-desktop
+Icon=com.novalink.NovaLink
+Terminal=false
+Type=Application
+Categories=Utility;Network;GTK;
+Keywords=android;connect;transfer;clipboard;pairing;share;
+StartupNotify=true

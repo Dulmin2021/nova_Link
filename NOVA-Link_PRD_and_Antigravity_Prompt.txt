@@ -1,0 +1,1668 @@
+NOVA-LINK
+PRODUCT REQUIREMENTS DOCUMENT (PRD)
+AND ANTIGRAVITY DEVELOPMENT MASTER PROMPT
+
+============================================================
+PART 1 — PRODUCT REQUIREMENTS DOCUMENT
+============================================================
+
+1. PRODUCT OVERVIEW
+
+Product Name: NOVA-Link
+Product Type: Cross-platform Linux <-> Android device connectivity platform
+Primary Target: Fedora Linux + Android
+Secondary Targets: Arch, Manjaro, Ubuntu, Debian, openSUSE, and other major Linux distributions
+
+Product Vision:
+
+NOVA-Link enables users to seamlessly connect their Android phone with their Linux computer over a local network and perform common cross-device operations without requiring cloud services.
+
+The product should provide a modern alternative to existing device-integration solutions, with a strong emphasis on:
+
+- Local-first communication
+- Privacy
+- Security
+- Cross-desktop compatibility
+- Excellent UX
+- Reliability
+- Extensibility
+
+------------------------------------------------------------
+2. PROBLEM STATEMENT
+------------------------------------------------------------
+
+Linux users frequently need to move files, URLs, text, and other information between their Android phone and computer.
+
+Existing solutions can be:
+
+- Desktop-environment dependent
+- Difficult to configure
+- Visually outdated
+- Overly complex
+- Inconsistent across Linux distributions
+- Dependent on third-party cloud services
+
+NOVA-Link should provide a simple experience:
+
+Install -> Discover -> Pair -> Use
+
+A user should be able to connect their Android phone to Fedora in less than a minute.
+
+------------------------------------------------------------
+3. GOALS
+------------------------------------------------------------
+
+Primary Goals:
+
+1. Connect Android devices with Linux computers over LAN.
+2. Automatically discover nearby devices.
+3. Provide secure device pairing.
+4. Transfer files in both directions.
+5. Synchronize clipboard contents.
+6. Send URLs and text between devices.
+7. Display connection and device status.
+8. Provide desktop notifications.
+9. Work independently of KDE Plasma.
+10. Provide a modern Linux desktop UI.
+11. Provide a modern Android application.
+12. Keep communication local by default.
+13. Design the communication protocol to be extensible.
+
+Non-Goals for MVP:
+
+Do NOT initially implement:
+
+- Cloud synchronization
+- User accounts
+- AI features
+- SMS management
+- Full remote desktop
+- Screen mirroring
+- Video streaming
+- Complex media control
+- Internet-based device connectivity
+
+These can be future modules.
+
+------------------------------------------------------------
+4. TARGET USERS
+------------------------------------------------------------
+
+Primary User:
+
+Linux developer/student who:
+
+- Uses Fedora or another Linux distribution
+- Owns an Android smartphone
+- Frequently transfers files between phone and computer
+- Wants a simple local solution
+- Values privacy
+
+Secondary User:
+
+Linux power user who wants:
+
+- Clipboard synchronization
+- Notification mirroring
+- URL sharing
+- Device information
+- Remote control capabilities
+
+------------------------------------------------------------
+5. SUPPORTED PLATFORMS
+------------------------------------------------------------
+
+Linux:
+
+Primary:
+- Fedora Workstation
+- Fedora KDE Plasma
+
+Secondary:
+- Arch Linux
+- Manjaro
+- Ubuntu
+- Debian
+- openSUSE
+
+Desktop environments:
+- GNOME
+- KDE Plasma
+- XFCE
+
+The core networking system must not depend on a particular desktop environment.
+
+Android:
+
+Minimum target:
+Android 10+
+
+Preferred development target:
+Latest stable Android SDK.
+
+------------------------------------------------------------
+6. PROPOSED TECHNOLOGY STACK
+------------------------------------------------------------
+
+Linux Core:
+
+Rust
+
+Use Rust for:
+
+- Networking
+- Device discovery
+- Protocol implementation
+- Encryption
+- File transfer
+- Background daemon
+- Device management
+
+Reasons:
+
+- Memory safety
+- Excellent networking ecosystem
+- High performance
+- Good Linux support
+- Strong concurrency model
+
+Linux UI:
+
+Preferred:
+GTK4 + libadwaita
+
+The UI should follow modern Linux desktop design principles.
+
+Architecture:
+
+Linux UI
+    |
+    v
+NOVA-Link Client
+    |
+    v
+NOVA-Link Core
+    |
+    +-- Discovery
+    +-- Protocol
+    +-- Security
+    +-- Transfer
+    +-- Device Management
+
+The UI must not contain networking logic.
+
+Android Technology:
+
+Use:
+
+- Kotlin
+- Jetpack Compose
+- Kotlin Coroutines
+- Android Services
+- Android Network APIs
+- Android Notification APIs
+- Android Storage Access Framework
+
+Architecture:
+
+Compose UI
+    |
+ViewModel
+    |
+Repository
+    |
+NOVA-Link Service
+    |
+Network Protocol
+
+Use MVVM or a similarly clean architecture.
+
+------------------------------------------------------------
+7. COMMUNICATION ARCHITECTURE
+------------------------------------------------------------
+
+NOVA-Link should use a modular protocol.
+
+Android
+    |
+    | Wi-Fi / LAN
+    |
+    v
+NOVA-Link Protocol
+    |
+    +-- Discovery
+    +-- Pairing
+    +-- Authentication
+    +-- Encryption
+    +-- Commands
+    +-- File Transfer
+    +-- Events
+    |
+    v
+Linux
+
+Transport:
+
+Initial implementation:
+TCP
+
+Optional future:
+- UDP discovery
+- QUIC
+- Bluetooth fallback
+
+------------------------------------------------------------
+8. DEVICE DISCOVERY
+------------------------------------------------------------
+
+Use local-network discovery.
+
+Recommended approach:
+
+mDNS / DNS-SD
+
+Example service:
+
+_nova-link._tcp.local
+
+Each device should advertise:
+
+- device_id
+- device_name
+- device_type
+- service_port
+- protocol_version
+- capabilities
+
+Example:
+
+{
+  "device_id": "unique-device-id",
+  "device_name": "Dulmin's Fedora",
+  "device_type": "linux",
+  "protocol_version": "1.0",
+  "capabilities": [
+    "file_transfer",
+    "clipboard",
+    "url_share"
+  ]
+}
+
+------------------------------------------------------------
+9. PAIRING
+------------------------------------------------------------
+
+Pairing must require explicit user approval.
+
+Example Android:
+
+Discovers Fedora
+
+"Fedora Laptop"
+
+[Pair]
+
+Linux:
+
+New device requesting connection
+
+Pixel 8
+
+Verification code:
+
+482 731
+
+[Accept] [Reject]
+
+The same verification information should be visible on both devices.
+
+Do not automatically trust newly discovered devices.
+
+------------------------------------------------------------
+10. SECURITY
+------------------------------------------------------------
+
+Security is a core requirement.
+
+Requirements:
+
+- TLS or an equivalent authenticated encrypted transport
+- Device identity
+- Secure key storage
+- Explicit pairing
+- Certificate/public-key verification
+- Replay protection
+- Message authentication
+- Secure random device IDs
+
+Never transmit sensitive information in plaintext.
+
+Never store private keys in application source code.
+
+Never hard-code encryption keys.
+
+------------------------------------------------------------
+11. CORE FEATURES
+------------------------------------------------------------
+
+Feature 1 — Device Discovery
+
+Users should automatically see nearby NOVA-Link devices.
+
+Example:
+
+Nearby Devices
+
+[Connected] Fedora Laptop
+
+[Available] Pixel 8
+
+[Offline] Samsung Galaxy
+
+------------------------------------------------------------
+12. FILE TRANSFER
+------------------------------------------------------------
+
+Android -> Linux:
+
+Android Share -> NOVA-Link
+
+The Linux application receives the file.
+
+Linux -> Android:
+
+Right-click a file:
+
+Send with NOVA-Link
+
+Files should show:
+
+- Filename
+- Size
+- Transfer speed
+- Progress
+- Estimated remaining time
+- Cancel button
+
+Example:
+
+Sending
+
+ubuntu.iso
+
+72%
+
+82 MB/s
+
+[Cancel]
+
+------------------------------------------------------------
+13. CLIPBOARD SYNCHRONIZATION
+------------------------------------------------------------
+
+Support:
+
+Linux -> Android
+Android -> Linux
+
+Example:
+
+User copies:
+
+https://example.com
+
+The URL becomes available on the other device.
+
+Users must be able to disable clipboard synchronization.
+
+Do not synchronize sensitive clipboard content without user consent.
+
+------------------------------------------------------------
+14. URL SHARING
+------------------------------------------------------------
+
+Android:
+
+Share -> NOVA-Link
+
+Linux receives:
+
+URL received
+
+https://example.com
+
+[Open]
+
+Linux -> Android should work similarly.
+
+------------------------------------------------------------
+15. TEXT SHARING
+------------------------------------------------------------
+
+Users can send arbitrary text.
+
+Example:
+
+Send text to:
+
+Fedora Laptop
+
+sudo dnf update
+
+[Send]
+
+------------------------------------------------------------
+16. NOTIFICATIONS
+------------------------------------------------------------
+
+Future MVP+ feature.
+
+Android notifications can appear on Linux.
+
+Example:
+
+WhatsApp
+
+New message received
+
+"Are you coming tomorrow?"
+
+Users must have granular notification permissions.
+
+------------------------------------------------------------
+17. DEVICE INFORMATION
+------------------------------------------------------------
+
+Example:
+
+Pixel 8
+
+Battery: 78%
+Connection: Wi-Fi
+IP Address: Local network
+Status: Connected
+Last seen: Now
+
+------------------------------------------------------------
+18. LINUX APPLICATION UI
+------------------------------------------------------------
+
+Main window concept:
+
+NOVA-Link
+
+Devices
+
+Pixel 8
+Connected
+
+[Send File]
+[Send Text]
+[Send URL]
+
+Clipboard: ON
+
+Design principles:
+
+- Minimal
+- Modern
+- Clean
+- Native Linux feeling
+- Keyboard accessible
+- Dark/light mode
+- Responsive
+
+------------------------------------------------------------
+19. ANDROID UI
+------------------------------------------------------------
+
+Home:
+
+NOVA-Link
+
+Connected Devices
+
+Pixel 8
+Connected
+
+[Send File] [Send Text]
+
+Navigation:
+
+Home
+Devices
+Transfers
+Activity
+Settings
+
+------------------------------------------------------------
+20. SETTINGS
+------------------------------------------------------------
+
+General:
+
+- Start NOVA-Link on login
+- Theme
+- Language
+- Notifications
+
+Devices:
+
+- Paired devices
+- Remove device
+- Rename device
+- Block device
+
+Privacy:
+
+- Clipboard synchronization
+- Notification synchronization
+- File transfer permissions
+- Local network access
+
+Security:
+
+- Re-pair devices
+- Remove trusted keys
+- Device verification
+
+------------------------------------------------------------
+21. LINUX BACKGROUND SERVICE
+------------------------------------------------------------
+
+NOVA-Link should run as a background service.
+
+Architecture:
+
+nova-link-daemon
+    |
+    +-- Discovery
+    +-- Connections
+    +-- Transfers
+    +-- Security
+            |
+            v
+      Linux Desktop UI
+
+Use:
+
+systemd user service
+
+Example:
+
+~/.config/systemd/user/nova-link.service
+
+The daemon should continue running even when the GUI is closed.
+
+------------------------------------------------------------
+22. FILE STORAGE
+------------------------------------------------------------
+
+Linux:
+
+~/Downloads/NOVA-Link/
+
+Android:
+
+Downloads/NOVA-Link/
+
+Allow users to change the destination.
+
+Never overwrite an existing file without confirmation.
+
+Example:
+
+photo.jpg already exists.
+
+[Replace]
+[Keep Both]
+[Cancel]
+
+------------------------------------------------------------
+23. PROJECT STRUCTURE
+------------------------------------------------------------
+
+nova-link/
+|
++-- README.md
++-- LICENSE
++-- CONTRIBUTING.md
++-- SECURITY.md
+|
++-- protocol/
+|   +-- README.md
+|   +-- discovery.md
+|   +-- pairing.md
+|   +-- messages.md
+|   +-- file-transfer.md
+|
++-- linux/
+|   +-- core/
+|   +-- daemon/
+|   +-- desktop/
+|   +-- packaging/
+|
++-- android/
+|   +-- app/
+|
++-- tests/
+|
++-- docs/
+|
++-- .github/
+    +-- workflows/
+
+------------------------------------------------------------
+24. DEVELOPMENT PHASES
+------------------------------------------------------------
+
+Phase 0 — Architecture
+
+Deliver:
+
+- Repository
+- Architecture documentation
+- Protocol specification
+- Security model
+- UI specification
+
+Phase 1 — Linux Core
+
+Implement:
+
+- Device identity
+- TCP communication
+- mDNS discovery
+- Basic protocol
+- Logging
+- Connection management
+
+Create automated tests.
+
+Phase 2 — Android Connectivity
+
+Implement:
+
+- Android discovery
+- Linux discovery
+- Pairing
+- Authentication
+- Secure connection
+
+Phase 3 — File Transfer
+
+Implement:
+
+- Android -> Linux
+- Linux -> Android
+- Progress
+- Cancellation
+- Error recovery
+
+Phase 4 — Clipboard
+
+Implement:
+
+- Clipboard synchronization
+- Permission controls
+- Loop prevention
+
+Phase 5 — URL/Text Sharing
+
+Implement:
+
+- Share intents
+- Linux receiving
+- Android receiving
+
+Phase 6 — Desktop Integration
+
+Implement:
+
+- Notifications
+- File-manager integration
+- systemd service
+- Desktop notifications
+- Tray/background integration where appropriate
+
+Phase 7 — Packaging
+
+Create:
+
+- Fedora RPM
+- Flatpak
+- Arch package/AUR definition
+- Debian package
+
+Prefer Flatpak for the easiest cross-distribution desktop installation.
+
+Phase 8 — Testing
+
+Test:
+
+- Fedora <-> Android
+- Arch <-> Android
+- Ubuntu <-> Android
+- KDE <-> Android
+- GNOME <-> Android
+- XFCE <-> Android
+
+Also test:
+
+- Different Wi-Fi networks
+- Wi-Fi isolation
+- Firewall enabled
+- Network reconnect
+- Sleep/wake
+- Large files
+- Multiple devices
+- Duplicate files
+- Connection loss
+
+------------------------------------------------------------
+25. PERFORMANCE REQUIREMENTS
+------------------------------------------------------------
+
+For local-network file transfers:
+
+- Use streaming rather than loading entire files into memory.
+- Support files larger than 10 GB.
+- Display real-time transfer speed.
+- Allow cancellation.
+- Resume interrupted transfers where practical.
+- Avoid blocking the UI thread.
+
+Target:
+
+Minimal CPU and RAM consumption while idle.
+
+------------------------------------------------------------
+26. RELIABILITY REQUIREMENTS
+------------------------------------------------------------
+
+Wi-Fi disconnected
+    |
+Connection lost
+    |
+Retry discovery
+    |
+Device returns
+    |
+Reconnect
+
+The application should not crash because:
+
+- Device disappears
+- Connection is refused
+- Transfer fails
+- Invalid packet arrives
+- Malformed message is received
+- User cancels transfer
+
+------------------------------------------------------------
+27. LOGGING
+------------------------------------------------------------
+
+Use structured logging.
+
+Levels:
+
+ERROR
+WARN
+INFO
+DEBUG
+TRACE
+
+Example:
+
+2026-08-18 22:40:12 INFO
+Device discovered: Pixel 8
+
+2026-08-18 22:40:16 INFO
+Pairing request received
+
+2026-08-18 22:40:21 INFO
+Device paired successfully
+
+Do not log:
+
+- Private keys
+- Authentication secrets
+- Sensitive clipboard contents
+- File contents
+
+------------------------------------------------------------
+28. TESTING
+------------------------------------------------------------
+
+Unit Tests:
+
+Test:
+
+- Protocol serialization
+- Authentication
+- Device IDs
+- Transfer calculations
+- State machines
+
+Integration Tests:
+
+Test:
+
+- Discovery
+- Pairing
+- Connection
+- Transfer
+- Clipboard
+- Reconnect
+
+Security Tests:
+
+Test:
+
+- Unknown device
+- Invalid authentication
+- Replay attempts
+- Malformed packets
+- Unauthorized commands
+
+UI Tests:
+
+Android:
+
+- Compose UI tests
+
+Linux:
+
+- GTK UI tests where practical
+
+------------------------------------------------------------
+29. DEFINITION OF DONE — MVP
+------------------------------------------------------------
+
+The MVP is complete when:
+
+- Fedora can discover Android.
+- Android can discover Fedora.
+- Devices can securely pair.
+- Paired devices reconnect automatically.
+- Android can send files to Fedora.
+- Fedora can send files to Android.
+- File transfers show progress.
+- Transfers can be cancelled.
+- Clipboard synchronization works.
+- URL sharing works.
+- Text sharing works.
+- Linux daemon works without GUI.
+- Android background service works correctly.
+- Application survives network interruptions.
+- No sensitive data is logged.
+- Fedora installation is documented.
+- Automated tests exist for the core protocol.
+
+
+============================================================
+PART 2 — ANTIGRAVITY MASTER DEVELOPMENT PROMPT
+============================================================
+
+NOVA-Link — AI Software Engineering Master Prompt
+
+You are the principal software architect and senior full-stack engineer responsible for designing and implementing NOVA-Link, a secure local-first Android <-> Linux connectivity platform.
+
+Do not treat this as a simple prototype or a KDE Connect clone.
+
+Build it as a production-quality, modular, open-source project with a clean architecture, documented communication protocol, strong security model, automated testing, and maintainable code.
+
+------------------------------------------------------------
+1. PRODUCT VISION
+------------------------------------------------------------
+
+NOVA-Link allows an Android smartphone and Linux computer to communicate seamlessly over a local network.
+
+The core user experience should be:
+
+Install -> Discover -> Pair -> Connect -> Share
+
+The primary development target is:
+
+Fedora Linux + Android
+
+The architecture must remain desktop-environment agnostic and should eventually support Fedora, Arch, Manjaro, Ubuntu, Debian, openSUSE, GNOME, KDE Plasma, and XFCE.
+
+------------------------------------------------------------
+2. IMPORTANT ENGINEERING PRINCIPLE
+------------------------------------------------------------
+
+DO NOT tightly couple the UI, networking, protocol, or platform-specific functionality.
+
+Use this architecture:
+
+                NOVA-Link Protocol
+                       |
+             +---------+---------+
+             |                   |
+       Linux Core           Android Core
+             |                   |
+       Linux Adapter        Android Adapter
+             |                   |
+        Desktop UI          Mobile UI
+
+The protocol and core networking layer must be independently testable.
+
+------------------------------------------------------------
+3. TECHNOLOGY STACK
+------------------------------------------------------------
+
+Linux:
+
+Use:
+
+- Rust
+- Tokio
+- mDNS/DNS-SD
+- TCP initially
+- TLS or equivalent authenticated encryption
+- GTK4
+- libadwaita
+- systemd user services
+
+Use Cargo workspace architecture where appropriate.
+
+Android:
+
+Use:
+
+- Kotlin
+- Jetpack Compose
+- Coroutines
+- Android Services
+- Android Network APIs
+- Storage Access Framework
+- Notification APIs
+
+Use a clean MVVM or equivalent architecture.
+
+------------------------------------------------------------
+4. REPOSITORY STRUCTURE
+------------------------------------------------------------
+
+Create:
+
+nova-link/
++-- protocol/
++-- linux/
+|   +-- core/
+|   +-- daemon/
+|   +-- desktop/
+|   +-- packaging/
++-- android/
+|   +-- app/
++-- tests/
++-- docs/
++-- .github/
++-- README.md
+
+Adapt the structure when a technically superior architecture is justified.
+
+Do not create unnecessary abstractions.
+
+------------------------------------------------------------
+5. DEVELOPMENT STRATEGY
+------------------------------------------------------------
+
+DO NOT implement the entire product in one step.
+
+Work incrementally.
+
+Stage 1:
+
+Create the repository and architecture.
+
+Deliver:
+
+- Directory structure
+- Build system
+- README
+- Architecture document
+- Protocol specification
+- Security model
+- Development setup documentation
+
+Do not start advanced features before the architecture is stable.
+
+Stage 2:
+
+Implement the Linux core.
+
+Implement:
+
+- Device identity
+- TCP transport
+- mDNS discovery
+- Connection management
+- Protocol serialization
+- Structured logging
+
+Create automated tests.
+
+Stage 3:
+
+Implement Android connectivity.
+
+Implement:
+
+- Device discovery
+- Linux discovery
+- Connection establishment
+- Pairing
+- Authentication
+
+Stage 4:
+
+Implement secure communication.
+
+All communication after pairing must be authenticated and encrypted.
+
+Never hard-code keys.
+
+Never transmit credentials or sensitive data in plaintext.
+
+Stage 5:
+
+Implement file transfer.
+
+Requirements:
+
+- Bidirectional transfer
+- Streaming
+- Large files
+- Progress reporting
+- Cancellation
+- Error handling
+- Duplicate filename handling
+- Network interruption handling
+
+Do not load entire files into memory.
+
+Stage 6:
+
+Implement clipboard synchronization.
+
+Requirements:
+
+- Bidirectional synchronization
+- User-controlled enable/disable
+- Loop prevention
+- Privacy-conscious handling
+- Do not log clipboard contents
+
+Stage 7:
+
+Implement text and URL sharing.
+
+Android must integrate with Android Share Intent.
+
+Linux must provide an appropriate receiving interface.
+
+Stage 8:
+
+Implement desktop integration.
+
+Add:
+
+- systemd user service
+- desktop notifications
+- file manager integration where practical
+- background operation
+- application startup support
+
+Stage 9:
+
+Implement packaging.
+
+Primary:
+
+- Flatpak
+
+Also prepare:
+
+- Fedora RPM
+- Arch/AUR packaging
+- Debian packaging where practical
+
+Stage 10:
+
+Testing and hardening.
+
+Test:
+
+- Fedora <-> Android
+- Different Wi-Fi networks
+- Firewall enabled
+- Device disappearance
+- Network reconnection
+- Sleep/wake
+- Large files
+- Multiple devices
+- Invalid packets
+- Unauthorized devices
+- Interrupted transfers
+
+------------------------------------------------------------
+6. PROTOCOL REQUIREMENTS
+------------------------------------------------------------
+
+Create a formal protocol specification under:
+
+protocol/
+
+The protocol must define:
+
+- Version
+- Device identity
+- Discovery
+- Pairing
+- Authentication
+- Capabilities
+- Messages
+- Commands
+- Events
+- File transfers
+- Error codes
+- Connection lifecycle
+
+Design the protocol so future capabilities can be added without breaking existing clients.
+
+Use explicit protocol versioning.
+
+Example:
+
+{
+  "version": 1,
+  "message_type": "device_info",
+  "request_id": "uuid",
+  "payload": {}
+}
+
+Use a robust serialization format.
+
+Prefer a format that is compact, strongly typed, versionable, and safe to parse.
+
+------------------------------------------------------------
+7. DISCOVERY
+------------------------------------------------------------
+
+Use mDNS/DNS-SD.
+
+Service:
+
+_nova-link._tcp.local
+
+Advertise:
+
+- device ID
+- device name
+- device type
+- protocol version
+- port
+- capabilities
+
+Discovery must not automatically grant trust.
+
+Discovery means:
+
+"This device exists."
+
+Pairing means:
+
+"This device is trusted."
+
+Keep those concepts separate.
+
+------------------------------------------------------------
+8. PAIRING
+------------------------------------------------------------
+
+Implement explicit user approval.
+
+Example:
+
+Fedora Laptop
+
+New device:
+Pixel 8
+
+Verification code:
+482 731
+
+[Accept] [Reject]
+
+Both devices should display verification information.
+
+Store trusted device identity securely.
+
+Users must be able to revoke trust.
+
+------------------------------------------------------------
+9. SECURITY REQUIREMENTS
+------------------------------------------------------------
+
+Security is a first-class feature.
+
+Implement:
+
+- Authenticated encryption
+- Device identity
+- Secure key generation
+- Secure key storage
+- Certificate/public-key verification
+- Replay protection
+- Request validation
+- Authorization checks
+- Secure random identifiers
+
+Never:
+
+- hard-code secrets
+- log private keys
+- log authentication tokens
+- log clipboard contents
+- trust unknown devices automatically
+- execute arbitrary commands received from another device
+
+Design the system assuming the local network may contain malicious devices.
+
+------------------------------------------------------------
+10. LINUX UI
+------------------------------------------------------------
+
+Build a modern GTK4 + libadwaita interface.
+
+Main screen:
+
+NOVA-Link
+
+Devices
+
+Pixel 8
+Connected
+
+[Send File]
+[Send Text]
+[Send URL]
+
+Clipboard: ON
+
+Include:
+
+- Device list
+- Connection state
+- Transfer status
+- Pairing dialog
+- Settings
+- Privacy controls
+- Security controls
+- Light/dark theme
+- Keyboard accessibility
+
+Keep networking out of the UI layer.
+
+------------------------------------------------------------
+11. ANDROID UI
+------------------------------------------------------------
+
+Use Jetpack Compose.
+
+Screens:
+
+Home
+Devices
+Transfers
+Activity
+Settings
+
+The UI should feel modern and native to Android.
+
+Support:
+
+- Android Share Sheet
+- File picker
+- Notifications
+- Background service
+- Permissions
+- Connection status
+
+------------------------------------------------------------
+12. FILE TRANSFER UX
+------------------------------------------------------------
+
+Show:
+
+Sending photo.jpg
+
+██████████████░░░░
+
+72%
+
+82 MB/s
+
+[Cancel]
+
+Support:
+
+- Progress
+- Speed
+- ETA
+- Cancellation
+- Failure
+- Retry
+- Duplicate handling
+
+Use streaming I/O.
+
+------------------------------------------------------------
+13. CLIPBOARD
+------------------------------------------------------------
+
+Implement bidirectional clipboard synchronization.
+
+Prevent infinite synchronization loops.
+
+Provide:
+
+Settings
+-> Privacy
+-> Clipboard Synchronization
+-> ON/OFF
+
+Do not expose clipboard data in logs.
+
+Be conscious of sensitive clipboard information such as passwords, tokens, and private keys.
+
+------------------------------------------------------------
+14. RELIABILITY
+------------------------------------------------------------
+
+Implement robust connection state management.
+
+Example:
+
+CONNECTED
+    |
+CONNECTION_LOST
+    |
+DISCOVERING
+    |
+RECONNECTING
+    |
+CONNECTED
+
+The application must gracefully handle:
+
+- Wi-Fi loss
+- Device sleep
+- IP address changes
+- Connection refusal
+- Timeout
+- Malformed packets
+- Interrupted transfers
+
+Never crash because a peer disappeared.
+
+------------------------------------------------------------
+15. LOGGING
+------------------------------------------------------------
+
+Use structured logging.
+
+Levels:
+
+ERROR
+WARN
+INFO
+DEBUG
+TRACE
+
+Never log:
+
+- private keys
+- authentication secrets
+- clipboard contents
+- file contents
+
+Include useful diagnostic information such as:
+
+- connection state
+- device ID
+- transfer ID
+- error type
+- protocol version
+
+------------------------------------------------------------
+16. TESTING
+------------------------------------------------------------
+
+Write tests continuously while implementing features.
+
+Unit Tests:
+
+Test:
+
+- Serialization
+- Protocol
+- Device identity
+- State machines
+- Security logic
+- File-transfer logic
+
+Integration Tests:
+
+Test:
+
+- Discovery
+- Pairing
+- Authentication
+- Connection
+- File transfer
+- Clipboard
+- Reconnection
+
+Security Tests:
+
+Test:
+
+- Unknown devices
+- Invalid authentication
+- Replay attempts
+- Malformed messages
+- Unauthorized commands
+- Invalid file-transfer requests
+
+Do not postpone testing until the end.
+
+------------------------------------------------------------
+17. CODE QUALITY
+------------------------------------------------------------
+
+Follow these rules:
+
+1. Prefer simple architecture over unnecessary abstraction.
+2. Keep modules small.
+3. Use meaningful names.
+4. Avoid duplicated logic.
+5. Document non-obvious security decisions.
+6. Use type safety.
+7. Handle errors explicitly.
+8. Never silently ignore failures.
+9. Avoid blocking operations in asynchronous code.
+10. Keep UI and networking separate.
+
+Before adding a dependency, evaluate whether it is necessary.
+
+Do not introduce large frameworks without justification.
+
+------------------------------------------------------------
+18. DOCUMENTATION
+------------------------------------------------------------
+
+Create:
+
+README.md
+ARCHITECTURE.md
+SECURITY.md
+CONTRIBUTING.md
+DEVELOPMENT.md
+protocol/README.md
+
+README must include:
+
+- Product overview
+- Features
+- Architecture
+- Installation
+- Development setup
+- Supported platforms
+- Screenshots placeholder
+- Security model
+- Roadmap
+- Contribution instructions
+
+------------------------------------------------------------
+19. GIT STRATEGY
+------------------------------------------------------------
+
+Use clean commits.
+
+Examples:
+
+feat(protocol): add device discovery messages
+feat(linux): implement mDNS discovery
+feat(android): implement device discovery
+feat(security): implement device pairing
+feat(transfer): implement bidirectional file transfer
+test(protocol): add message serialization tests
+docs: document pairing protocol
+
+Do not make huge commits containing unrelated features.
+
+------------------------------------------------------------
+20. MVP DEFINITION
+------------------------------------------------------------
+
+Do not consider MVP complete until all of the following work:
+
+- Linux discovers Android.
+- Android discovers Linux.
+- Devices can pair securely.
+- Trusted devices reconnect.
+- Android -> Linux file transfer works.
+- Linux -> Android file transfer works.
+- Transfer progress works.
+- Transfer cancellation works.
+- Clipboard synchronization works.
+- URL sharing works.
+- Text sharing works.
+- Linux daemon runs independently of GUI.
+- Android background operation works.
+- Network interruption is handled.
+- Sensitive information is not logged.
+- Automated tests exist.
+- Fedora installation is documented.
+
+------------------------------------------------------------
+21. IMPORTANT PRODUCT DIRECTION
+------------------------------------------------------------
+
+NOVA-Link is NOT required to reproduce every KDE Connect feature.
+
+Do not blindly copy existing applications.
+
+Prioritize:
+
+1. Reliability
+2. Security
+3. Simplicity
+4. Excellent UX
+5. Cross-desktop compatibility
+6. Extensibility
+
+The architecture should allow future plugins/modules such as:
+
+NOVA-Link
+|
++-- File Transfer
++-- Clipboard
++-- URL Sharing
++-- Text Sharing
++-- Notifications
++-- Battery
++-- Media Control
++-- SMS
++-- Remote Input
++-- Camera
++-- Screen Sharing
+
+Implement these as future capabilities rather than coupling them into the MVP.
+
+------------------------------------------------------------
+22. AI AGENT WORKING RULES
+------------------------------------------------------------
+
+You are working as an autonomous senior engineering agent.
+
+Before implementing a feature:
+
+1. Inspect the existing repository.
+2. Understand the architecture.
+3. Identify dependencies.
+4. Check whether the feature already exists.
+5. Design the smallest clean implementation.
+6. Implement it.
+7. Write tests.
+8. Run tests.
+9. Fix failures.
+10. Update documentation.
+
+Never overwrite working functionality without understanding it.
+
+Never invent APIs or dependencies without verification.
+
+When an architectural decision is uncertain, explain the trade-off before committing to a large implementation.
+
+Prefer incremental, testable changes.
+
+------------------------------------------------------------
+23. FIRST TASK
+------------------------------------------------------------
+
+DO NOT immediately implement the entire application.
+
+Start by producing:
+
+1. Complete repository architecture.
+2. Technical Architecture Document.
+3. NOVA-Link Protocol Specification v1.
+4. Security Threat Model.
+5. Development Environment Setup.
+6. MVP implementation roadmap.
+7. Initial Git repository structure.
+8. Minimal Linux core skeleton.
+9. Minimal Android application skeleton.
+10. Automated test infrastructure.
+
+Then stop and provide a concise implementation status report containing:
+
+- What was created
+- Current architecture
+- Files created
+- Technologies selected
+- Tests created
+- Tests executed
+- Known issues
+- Recommended next implementation step
+
+Do not proceed to advanced features until the foundation is validated.
+
+============================================================
+END OF DOCUMENT
+============================================================

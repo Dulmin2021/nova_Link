@@ -1,0 +1,55 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "NOVA-Link Protocol Message Schema v1",
+  "description": "Standard schema for NOVA-Link wire control envelopes and payloads",
+  "type": "object",
+  "properties": {
+    "version": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 1,
+      "description": "Protocol major version"
+    },
+    "message_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Unique identifier for this message"
+    },
+    "reply_to": {
+      "type": ["string", "null"],
+      "format": "uuid",
+      "description": "Optional message_id being replied to"
+    },
+    "timestamp": {
+      "type": "integer",
+      "description": "Unix epoch timestamp in seconds"
+    },
+    "message_type": {
+      "type": "string",
+      "enum": [
+        "device_info",
+        "pairing_request",
+        "pairing_response",
+        "pairing_confirm",
+        "clipboard_sync",
+        "url_share",
+        "text_share",
+        "transfer_init",
+        "transfer_accept",
+        "transfer_reject",
+        "transfer_chunk",
+        "transfer_progress",
+        "transfer_complete",
+        "transfer_cancel",
+        "ping",
+        "pong",
+        "error_response"
+      ]
+    },
+    "payload": {
+      "type": "object"
+    }
+  },
+  "required": ["version", "message_id", "timestamp", "message_type", "payload"],
+  "additionalProperties": false
+}
