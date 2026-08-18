@@ -43,11 +43,16 @@ fn main() {
 
     #[cfg(not(feature = "gui"))]
     {
-        info!("Running NOVA-Link Desktop Client in headless CLI / test mode");
+        info!("Running NOVA-Link Desktop Client in CLI status mode (use '--features gui' for native GTK4 window)");
         let rt = tokio::runtime::Runtime::new().unwrap();
         rt.block_on(async {
-            let res = ctx.client.send_command(IpcCommand::ListDevices).await;
-            info!("Daemon query result: {:?}", res);
+            match ctx.client.send_command(IpcCommand::ListDevices).await {
+                Ok(resp) => info!("Connected to active background daemon! Device response: {}", resp),
+                Err(e) => {
+                    tracing::warn!("Could not connect to nova-daemon IPC socket ({})", e);
+                    info!("TIP: Start the background daemon first with: 'cargo run --bin nova-daemon'");
+                }
+            }
         });
     }
 }

@@ -82,11 +82,89 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     });
 
+    // Start Unix Domain Socket IPC Listener for desktop UI frontends
+    #[cfg(unix)]
+    {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+        use tokio::net::UnixListener;
+        use crate::ipc::{IpcCommand, IpcResponse};
+
+        let socket_path = dirs_runtime_socket_path()
+            .unwrap_or_else(|| PathBuf::from("/tmp/nova-link.sock"));
+
+        if socket_path.exists() {
+            let _ = std::fs::remove_file(&socket_path);
+        }
+
+        if let Some(parent) = socket_path.parent() {
+            let _ = std::fs::create_dir_all(parent);
+        }
+
+        let unix_listener = UnixListener::bind(&socket_path)?;
+        info!(path = %socket_path.display(), "Local IPC Unix domain socket listener active");
+
+        let ipc_state = Arc::clone(&state);
+        let socket_cleanup = socket_path.clone();
+
+        tokio::spawn(async move {
+            loop {
+                match unix_listener.accept().await {
+                    Ok((mut stream, _)) => {
+                        let st = Arc::clone(&ipc_state);
+                        tokio::spawn(async move {
+                            let mut len_buf = [0u8; 4];
+                            if stream.read_exact(&mut len_buf).await.is_ok() {
+                                let len = u32::from_be_bytes(len_buf) as usize;
+                                let mut req_buf = vec![0u8; len];
+                                if stream.read_exact(&mut req_buf).await.is_ok() {
+                                    if let Ok(cmd) = serde_json::from_slice::<IpcCommand>(&req_buf) {
+                                        info!(command = ?cmd, "Received local IPC command");
+                                        let resp = match cmd {
+                                            IpcCommand::ListDevices => {
+                                                let guard = st.read().await;
+                                                let active = guard.peer_tracker.active_peers();
+                                                serde_json::to_vec(&IpcResponse::Ok(serde_json::json!(active))).unwrap_or_default()
+                                            }
+                                            IpcCommand::GetStatus => {
+                                                let guard = st.read().await;
+                                                serde_json::to_vec(&IpcResponse::Ok(serde_json::json!({
+                                                    "device_id": guard.identity.device_id,
+                                                    "device_name": guard.identity.device_name,
+                                                    "clipboard_enabled": guard.clipboard_manager.enabled,
+                                                }))).unwrap_or_default()
+                                            }
+                                            _ => serde_json::to_vec(&IpcResponse::Ok(serde_json::json!({"status": "acknowledged"}))).unwrap_or_default()
+                                        };
+
+                                        let resp_len = (resp.len() as u32).to_be_bytes();
+                                        let _ = stream.write_all(&resp_len).await;
+                                        let _ = stream.write_all(&resp).await;
+                                        let _ = stream.flush().await;
+                                    }
+                                }
+                            }
+                        });
+                    }
+                    Err(e) => {
+                        error!(error = %e, "IPC accept error");
+                    }
+                }
+            }
+        });
+    }
+
     info!("NOVA-Link daemon fully initialized and running");
 
     // Wait for shutdown signal
     tokio::signal::ctrl_c().await?;
     info!("NOVA-Link daemon gracefully shutting down");
+
+    #[cfg(unix)]
+    {
+        let socket_path = dirs_runtime_socket_path()
+            .unwrap_or_else(|| PathBuf::from("/tmp/nova-link.sock"));
+        let _ = std::fs::remove_file(socket_path);
+    }
 
     Ok(())
 }
@@ -98,4 +176,13 @@ fn dirs_config_path() -> Option<PathBuf> {
             std::env::var_os("HOME").map(|home| PathBuf::from(home).join(".config"))
         })
         .map(|config| config.join("nova-link"))
+}
+
+fn dirs_runtime_socket_path() -> Option<PathBuf> {
+    std::env::var_os("XDG_RUNTIME_DIR")
+        .map(PathBuf::from)
+        .or_else(|| {
+            std::env::var_os("TMPDIR").map(PathBuf::from)
+        })
+        .map(|dir| dir.join("nova-link.sock"))
 }
