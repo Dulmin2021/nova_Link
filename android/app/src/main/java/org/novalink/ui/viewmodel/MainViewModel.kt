@@ -91,6 +91,24 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    fun connectDirect(ip: String, port: Int = 42424) {
+        networkEngine.connectToHost(ip, port)
+        repository.updateDiscoveredDevice(
+            DeviceState(
+                info = DeviceInfoPayload(
+                    deviceId = "manual-$ip",
+                    deviceName = "Linux Host ($ip)",
+                    deviceType = "linux",
+                    protocolVersion = 1,
+                    capabilities = listOf("file_transfer", "clipboard", "url_share")
+                ),
+                ipAddress = ip,
+                isPaired = false,
+                isConnected = true
+            )
+        )
+    }
+
     override fun onCleared() {
         super.onCleared()
         nsdDiscovery.stop()
