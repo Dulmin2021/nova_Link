@@ -1,12 +1,8 @@
 use bytes::BytesMut;
 use nova_core::identity::DeviceIdentity;
 use nova_core::pairing::PairingSession;
-use nova_core::protocol::{
-    ClipboardSyncPayload, DeviceInfoPayload, DeviceType, MessageEnvelope, NovaFrameCodec,
-    PairingRequestPayload, RawFrame, UrlSharePayload,
-};
+use nova_core::protocol::{MessageEnvelope, NovaFrameCodec, RawFrame, UrlSharePayload};
 use tokio_util::codec::{Decoder, Encoder};
-use uuid::Uuid;
 
 #[test]
 fn test_end_to_end_envelope_framing() {

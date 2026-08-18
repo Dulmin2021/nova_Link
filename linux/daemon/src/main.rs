@@ -59,14 +59,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let tcp_listener = TcpListener::bind(bind_addr).await?;
     info!(addr = %bind_addr, "TCP transport listener active");
 
-    let tcp_state = Arc::clone(&state);
+    let _tcp_state = Arc::clone(&state);
     tokio::spawn(async move {
         loop {
             match tcp_listener.accept().await {
                 Ok((socket, remote_addr)) => {
                     info!(remote = %remote_addr, "Incoming TCP connection accepted");
                     let mut session = TransportSession::new(socket, remote_addr);
-                    let session_id = session.session_id;
+                    let _session_id = session.session_id;
 
                     tokio::spawn(async move {
                         while let Ok(Some(frame)) = session.receive_raw_frame().await {
