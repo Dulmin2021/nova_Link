@@ -15,14 +15,18 @@ object CryptoEngine {
         peerNonce: ByteArray,
         sharedSecret: ByteArray
     ): String {
-        // Calculate SHA-256 transcript hash
+        val (id1, id2) = canonicalPair(localIdentityPk, peerIdentityPk)
+        val (eph1, eph2) = canonicalPair(localEphemeralPk, peerEphemeralPk)
+        val (nonce1, nonce2) = canonicalPair(localNonce, peerNonce)
+
+        // Calculate SHA-256 transcript hash with canonical ordering
         val md = MessageDigest.getInstance("SHA-256")
-        md.update(localIdentityPk)
-        md.update(peerIdentityPk)
-        md.update(localEphemeralPk)
-        md.update(peerEphemeralPk)
-        md.update(localNonce)
-        md.update(peerNonce)
+        md.update(id1)
+        md.update(id2)
+        md.update(eph1)
+        md.update(eph2)
+        md.update(nonce1)
+        md.update(nonce2)
         md.update(sharedSecret)
         val transcriptHash = md.digest()
 
@@ -42,5 +46,16 @@ object CryptoEngine {
     fun sha256Hex(input: ByteArray): String {
         val digest = MessageDigest.getInstance("SHA-256").digest(input)
         return digest.joinToString("") { "%02x".format(it) }
+    }
+
+    private fun canonicalPair(a: ByteArray, b: ByteArray): Pair<ByteArray, ByteArray> {
+        val minLen = minOf(a.size, b.size)
+        for (i in 0 until minLen) {
+            val aByte = a[i].toInt() and 0xFF
+            val bByte = b[i].toInt() and 0xFF
+            if (aByte < bByte) return Pair(a, b)
+            if (aByte > bByte) return Pair(b, a)
+        }
+        return if (a.size <= b.size) Pair(a, b) else Pair(b, a)
     }
 }

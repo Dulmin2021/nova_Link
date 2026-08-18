@@ -64,8 +64,8 @@ fn test_pairing_handshake_simulation() {
 
     let sas_b = session_b
         .compute_sas(
-            &id_a,
             &id_b,
+            &id_a,
             session_a.local_ephemeral_pubkey,
             session_a.local_nonce,
         )

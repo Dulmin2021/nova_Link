@@ -70,14 +70,19 @@ impl PairingSession {
         self.peer_nonce = Some(peer_nonce);
         self.shared_secret = Some(shared_secret_bytes);
 
+        // Canonical ordering to ensure mathematical symmetry regardless of initiator/responder
+        let (id_1, id_2) = canonical_pair(local_identity_pk, peer_identity_pk);
+        let (eph_1, eph_2) = canonical_pair(&self.local_ephemeral_pubkey, &peer_ephemeral_pk);
+        let (nonce_1, nonce_2) = canonical_pair(&self.local_nonce, &peer_nonce);
+
         // Derive transcript hash
         let mut hasher = Sha256::new();
-        hasher.update(local_identity_pk);
-        hasher.update(peer_identity_pk);
-        hasher.update(&self.local_ephemeral_pubkey);
-        hasher.update(&peer_ephemeral_pk);
-        hasher.update(&self.local_nonce);
-        hasher.update(&peer_nonce);
+        hasher.update(id_1);
+        hasher.update(id_2);
+        hasher.update(eph_1);
+        hasher.update(eph_2);
+        hasher.update(nonce_1);
+        hasher.update(nonce_2);
         hasher.update(&shared_secret_bytes);
         let transcript_hash: [u8; 32] = hasher.finalize().into();
         self.transcript_hash = Some(transcript_hash);
@@ -123,6 +128,14 @@ impl PairingSession {
     }
 }
 
+fn canonical_pair<'a>(a: &'a [u8], b: &'a [u8]) -> (&'a [u8], &'a [u8]) {
+    if a <= b {
+        (a, b)
+    } else {
+        (b, a)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -153,8 +166,8 @@ mod tests {
 
         let sas_b = session_b
             .compute_sas(
-                &id_a_pk,
                 &id_b_pk,
+                &id_a_pk,
                 session_a.local_ephemeral_pubkey,
                 session_a.local_nonce,
             )
