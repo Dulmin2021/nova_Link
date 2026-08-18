@@ -1,11 +1,9 @@
 pub mod ipc_client;
 
 use std::sync::Arc;
-use tokio::sync::Mutex;
-use tracing::{error, info, Level};
+use tracing::{info, Level};
 use tracing_subscriber::FmtSubscriber;
-use uuid::Uuid;
-use ipc_client::{DeviceView, IpcClient, IpcCommand};
+use ipc_client::{IpcClient, IpcCommand};
 
 #[derive(Clone)]
 pub struct AppContext {

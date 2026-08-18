@@ -1,7 +1,5 @@
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use serde::{Deserialize, Serialize};
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
-use tokio::net::UnixStream;
 use uuid::Uuid;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -40,6 +38,8 @@ impl IpcClient {
     pub async fn send_command(&self, cmd: IpcCommand) -> Result<String, Box<dyn std::error::Error>> {
         #[cfg(unix)]
         {
+            use tokio::io::{AsyncReadExt, AsyncWriteExt};
+            use tokio::net::UnixStream;
             let mut stream = UnixStream::connect(&self.socket_path).await?;
             let request_bytes = serde_json::to_vec(&cmd)?;
             let len = (request_bytes.len() as u32).to_be_bytes();

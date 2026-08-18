@@ -1,24 +1,18 @@
 pub mod ipc;
 pub mod notifications;
 
-use std::collections::HashMap;
 use std::net::SocketAddr;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::sync::Arc;
-use tokio::net::{TcpListener, UnixListener};
+use tokio::net::TcpListener;
 use tokio::sync::RwLock;
-use tracing::{error, info, warn, Level};
+use tracing::{error, info, Level};
 use tracing_subscriber::FmtSubscriber;
-use uuid::Uuid;
 
 use nova_core::clipboard::ClipboardManager;
-use nova_core::discovery::{DiscoveredDevice, PeerTracker, DEFAULT_PEER_TTL, DEFAULT_PORT};
+use nova_core::discovery::{PeerTracker, DEFAULT_PEER_TTL, DEFAULT_PORT};
 use nova_core::identity::{DeviceIdentity, Keystore};
-use nova_core::protocol::{
-    DeviceInfoPayload, DeviceType, MessageEnvelope, NovaFrameCodec, RawFrame, PROTOCOL_VERSION,
-};
-use nova_core::transfer::TransferSession;
-use nova_core::transport::{ConnectionState, SessionManager, TransportSession};
+use nova_core::transport::{SessionManager, TransportSession};
 
 pub struct DaemonState {
     pub identity: DeviceIdentity,

@@ -4,7 +4,7 @@ use rand::RngCore;
 use sha2::{Digest, Sha256};
 use x25519_dalek::{EphemeralSecret, PublicKey as X25519PublicKey};
 use crate::error::{NovaError, NovaResult};
-use crate::identity::{hex_decode, hex_encode, DeviceIdentity};
+use crate::identity::DeviceIdentity;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PairingState {
@@ -126,6 +126,7 @@ impl PairingSession {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::identity::hex_decode;
 
     #[test]
     fn test_full_pairing_handshake_flow() {

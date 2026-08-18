@@ -1,16 +1,12 @@
 use std::net::SocketAddr;
-use std::sync::Arc;
 use std::time::{Duration, Instant};
 use futures_util::{SinkExt, StreamExt};
-use serde::{de::DeserializeOwned, Serialize};
+use serde::Serialize;
 use tokio::net::TcpStream;
-use tokio::sync::{mpsc, Mutex};
 use tokio_util::codec::Framed;
 use uuid::Uuid;
-use crate::error::{NovaError, NovaResult};
-use crate::protocol::{
-    EmptyPayload, MessageEnvelope, NovaFrameCodec, RawFrame, PROTOCOL_VERSION,
-};
+use crate::error::NovaResult;
+use crate::protocol::{EmptyPayload, MessageEnvelope, NovaFrameCodec, RawFrame};
 use crate::transport::ConnectionState;
 
 pub struct TransportSession {

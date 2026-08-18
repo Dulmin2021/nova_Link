@@ -5,7 +5,6 @@ use sha2::{Digest, Sha256};
 use uuid::Uuid;
 use crate::error::{NovaError, NovaResult};
 use crate::identity::hex_encode;
-use crate::protocol::TransferChunkHeader;
 
 pub const DEFAULT_CHUNK_SIZE: usize = 64 * 1024; // 64 KiB
 
