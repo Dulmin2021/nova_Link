@@ -3,7 +3,9 @@ pub mod ipc_client;
 use std::sync::Arc;
 use tracing::{info, Level};
 use tracing_subscriber::FmtSubscriber;
-use ipc_client::{IpcClient, IpcCommand};
+use ipc_client::IpcClient;
+#[allow(unused_imports)]
+use ipc_client::IpcCommand;
 
 #[derive(Clone)]
 pub struct AppContext {
@@ -26,9 +28,7 @@ fn main() {
 
     #[cfg(feature = "gui")]
     {
-        use libadwaita::prelude::*;
-        use libadwaita::{Application, ApplicationWindow, HeaderBar, PreferencesGroup, ActionRow, ViewStack};
-        use gtk4::{Box as GtkBox, Button, Label, Orientation, Switch};
+        use libadwaita::Application;
 
         let app = Application::builder()
             .application_id("com.novalink.NovaLink")
@@ -60,8 +60,9 @@ fn main() {
 #[cfg(feature = "gui")]
 fn build_ui(app: &libadwaita::Application, _ctx: &AppContext) {
     use gtk4::prelude::*;
+    use libadwaita::prelude::*;
     use gtk4::{
-        Align, Box as GtkBox, Button, Entry, HeaderBar, Image, Label, Orientation,
+        Align, Box as GtkBox, Button, Entry, Label, Orientation,
         ScrolledWindow, CssProvider, STYLE_PROVIDER_PRIORITY_APPLICATION, gdk::Display,
     };
     use libadwaita::ApplicationWindow;
