@@ -29,6 +29,7 @@ fn main() {
     #[cfg(feature = "gui")]
     {
         use libadwaita::Application;
+        use libadwaita::gio::prelude::{ApplicationExt, ApplicationExtManual};
 
         let app = Application::builder()
             .application_id("com.novalink.NovaLink")
@@ -69,7 +70,7 @@ fn build_ui(app: &libadwaita::Application, _ctx: &AppContext) {
 
     // Load custom dashboard CSS theme
     let provider = CssProvider::new();
-    provider.load_from_data(include_str!("style.css"));
+    provider.load_from_string(include_str!("style.css"));
     if let Some(display) = Display::default() {
         gtk4::style_context_add_provider_for_display(
             &display,
