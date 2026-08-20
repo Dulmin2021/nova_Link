@@ -1,0 +1,230 @@
+/* NOVA-Link GTK4 / Libadwaita Dashboard Theme */
+
+window {
+    background-color: #F8FAFC;
+    color: #0F172A;
+    font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+}
+
+/* Sidebar */
+.sidebar-panel {
+    background-color: #F1F5F9;
+    border-right: 1px solid #E2E8F0;
+    padding: 20px 16px;
+    min-width: 220px;
+}
+
+.brand-title {
+    font-size: 18px;
+    font-weight: 800;
+    color: #0F172A;
+    margin-left: 8px;
+}
+
+.brand-subtitle {
+    font-size: 11px;
+    color: #64748B;
+    margin-left: 8px;
+}
+
+.sidebar-btn {
+    padding: 10px 14px;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 500;
+    color: #334155;
+    background: transparent;
+    border: none;
+    transition: all 150ms ease-in-out;
+}
+
+.sidebar-btn:hover {
+    background-color: #E2E8F0;
+}
+
+.sidebar-btn-active {
+    background-color: #34D399;
+    color: #064E3B;
+    font-weight: 700;
+    border-radius: 8px;
+}
+
+.sidebar-btn-active:hover {
+    background-color: #10B981;
+    color: #FFFFFF;
+}
+
+.pair-new-btn {
+    background-color: #006097;
+    color: #FFFFFF;
+    font-weight: 600;
+    padding: 12px;
+    border-radius: 8px;
+    border: none;
+}
+
+.pair-new-btn:hover {
+    background-color: #004D7A;
+}
+
+/* Header */
+.dashboard-title {
+    font-size: 22px;
+    font-weight: 700;
+    color: #0F172A;
+}
+
+.search-entry {
+    background-color: #E2E8F0;
+    border-radius: 20px;
+    padding: 6px 14px;
+    border: 1px solid #CBD5E1;
+    color: #334155;
+}
+
+/* Quick Actions */
+.quick-action-primary {
+    background-color: #006097;
+    color: #FFFFFF;
+    border-radius: 12px;
+    padding: 24px 16px;
+    border: none;
+}
+
+.quick-action-primary:hover {
+    background-color: #004D7A;
+}
+
+.quick-action-secondary {
+    background-color: #EEF2F6;
+    color: #0F172A;
+    border-radius: 12px;
+    padding: 24px 16px;
+    border: 1px solid #E2E8F0;
+}
+
+.quick-action-secondary:hover {
+    background-color: #E2E8F0;
+}
+
+.action-icon-circle {
+    background-color: rgba(255, 255, 255, 0.2);
+    border-radius: 50%;
+    min-width: 44px;
+    min-height: 44px;
+    margin-bottom: 8px;
+}
+
+.action-icon-circle-blue {
+    background-color: #D0E2FF;
+    border-radius: 50%;
+    min-width: 44px;
+    min-height: 44px;
+    margin-bottom: 8px;
+}
+
+.action-icon-circle-wheat {
+    background-color: #FEEBC8;
+    border-radius: 50%;
+    min-width: 44px;
+    min-height: 44px;
+    margin-bottom: 8px;
+}
+
+.action-text-primary {
+    font-size: 14px;
+    font-weight: 700;
+    color: #FFFFFF;
+}
+
+.action-text-secondary {
+    font-size: 14px;
+    font-weight: 700;
+    color: #0F172A;
+}
+
+/* Section Header */
+.section-title {
+    font-size: 16px;
+    font-weight: 700;
+    color: #0F172A;
+}
+
+.scanning-badge {
+    color: #10B981;
+    font-size: 12px;
+    font-weight: 500;
+}
+
+/* Device Cards */
+.device-card-active {
+    background-color: #FFFFFF;
+    border: 1px solid #E2E8F0;
+    border-radius: 12px;
+    padding: 16px;
+}
+
+.device-card-offline {
+    background-color: #F8FAFC;
+    border: 1px solid #E2E8F0;
+    border-radius: 12px;
+    padding: 16px;
+}
+
+.device-name {
+    font-size: 15px;
+    font-weight: 700;
+    color: #0F172A;
+}
+
+.badge-connected {
+    background-color: #DCFCE7;
+    color: #15803D;
+    font-size: 11px;
+    font-weight: 700;
+    border-radius: 12px;
+    padding: 2px 8px;
+}
+
+.badge-offline {
+    background-color: #F1F5F9;
+    color: #64748B;
+    font-size: 11px;
+    font-weight: 700;
+    border-radius: 12px;
+    padding: 2px 8px;
+}
+
+.device-subtext {
+    font-size: 12px;
+    color: #64748B;
+}
+
+.device-action-button {
+    background-color: #FFFFFF;
+    border: 1px solid #CBD5E1;
+    border-radius: 6px;
+    padding: 6px 12px;
+    font-size: 12px;
+    font-weight: 600;
+    color: #334155;
+}
+
+.device-action-button:hover {
+    background-color: #F1F5F9;
+}
+
+/* Bottom Status Bar */
+.bottom-status-bar {
+    background-color: #F1F5F9;
+    border-top: 1px solid #E2E8F0;
+    padding: 6px 16px;
+    font-family: monospace;
+    font-size: 11px;
+    color: #64748B;
+}
+
+.status-network-active {
+    color: #10B981;
+    font-weight: 600;
+}
