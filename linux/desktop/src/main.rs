@@ -413,4 +413,264 @@ fn build_ui(app: &libadwaita::Application, _ctx: &AppContext) {
 
     window.set_content(Some(&root_box));
     window.present();
+
+    // ==========================================
+    // BUTTON CLICK HANDLERS
+    // ==========================================
+
+    // Pair New Device button → show IP connect dialog
+    {
+        let w = window.clone();
+        pair_btn.connect_clicked(move |_| {
+            let dialog = gtk4::Dialog::builder()
+                .title("Pair New Device")
+                .transient_for(&w)
+                .modal(true)
+                .build();
+
+            let content = dialog.content_area();
+            let vbox = GtkBox::new(Orientation::Vertical, 12);
+            vbox.set_margin_top(16);
+            vbox.set_margin_bottom(16);
+            vbox.set_margin_start(20);
+            vbox.set_margin_end(20);
+
+            let label = Label::new(Some("Enter device IP address or Tailscale IP:"));
+            label.set_xalign(0.0);
+            vbox.append(&label);
+
+            let entry = Entry::builder()
+                .placeholder_text("e.g. 100.x.x.x or 192.168.1.x")
+                .build();
+            vbox.append(&entry);
+
+            let connect_btn = Button::builder()
+                .label("Connect")
+                .build();
+            connect_btn.add_css_class("pair-new-btn");
+            vbox.append(&connect_btn);
+
+            content.append(&vbox);
+
+            let entry_clone = entry.clone();
+            let dialog_clone = dialog.clone();
+            connect_btn.connect_clicked(move |_| {
+                let ip = entry_clone.text();
+                if !ip.is_empty() {
+                    tracing::info!("Connecting to device at IP: {}", ip);
+                    dialog_clone.close();
+                }
+            });
+
+            dialog.present();
+        });
+    }
+
+    // Send File button
+    {
+        let w = window.clone();
+        card_file.connect_clicked(move |_| {
+            let chooser = gtk4::FileChooserDialog::new(
+                Some("Select File to Send"),
+                Some(&w),
+                gtk4::FileChooserAction::Open,
+                &[
+                    ("Cancel", gtk4::ResponseType::Cancel),
+                    ("Send", gtk4::ResponseType::Accept),
+                ],
+            );
+            chooser.connect_response(move |d, resp| {
+                if resp == gtk4::ResponseType::Accept {
+                    if let Some(file) = d.file() {
+                        if let Some(path) = file.path() {
+                            tracing::info!("Sending file: {:?}", path);
+                        }
+                    }
+                }
+                d.close();
+            });
+            chooser.present();
+        });
+    }
+
+    // Send Text button → text input dialog
+    {
+        let w = window.clone();
+        card_text.connect_clicked(move |_| {
+            let dialog = gtk4::Dialog::builder()
+                .title("Send Text")
+                .transient_for(&w)
+                .modal(true)
+                .build();
+
+            let content = dialog.content_area();
+            let vbox = GtkBox::new(Orientation::Vertical, 12);
+            vbox.set_margin_top(16);
+            vbox.set_margin_bottom(16);
+            vbox.set_margin_start(20);
+            vbox.set_margin_end(20);
+
+            let label = Label::new(Some("Enter text to send to your Android device:"));
+            label.set_xalign(0.0);
+            vbox.append(&label);
+
+            let entry = gtk4::TextView::new();
+            entry.set_size_request(-1, 80);
+            vbox.append(&entry);
+
+            let send_btn = Button::builder().label("Send").build();
+            send_btn.add_css_class("pair-new-btn");
+            vbox.append(&send_btn);
+
+            content.append(&vbox);
+
+            let buf = entry.buffer();
+            let dialog_clone = dialog.clone();
+            send_btn.connect_clicked(move |_| {
+                let text = buf.text(&buf.start_iter(), &buf.end_iter(), false);
+                tracing::info!("Sending text: {}", text);
+                dialog_clone.close();
+            });
+
+            dialog.present();
+        });
+    }
+
+    // Send URL button → URL input dialog
+    {
+        let w = window.clone();
+        card_url.connect_clicked(move |_| {
+            let dialog = gtk4::Dialog::builder()
+                .title("Send URL")
+                .transient_for(&w)
+                .modal(true)
+                .build();
+
+            let content = dialog.content_area();
+            let vbox = GtkBox::new(Orientation::Vertical, 12);
+            vbox.set_margin_top(16);
+            vbox.set_margin_bottom(16);
+            vbox.set_margin_start(20);
+            vbox.set_margin_end(20);
+
+            let label = Label::new(Some("Paste URL to share with your Android device:"));
+            label.set_xalign(0.0);
+            vbox.append(&label);
+
+            let entry = Entry::builder()
+                .placeholder_text("https://...")
+                .build();
+            vbox.append(&entry);
+
+            let send_btn = Button::builder().label("Share URL").build();
+            send_btn.add_css_class("pair-new-btn");
+            vbox.append(&send_btn);
+
+            content.append(&vbox);
+
+            let entry_clone = entry.clone();
+            let dialog_clone = dialog.clone();
+            send_btn.connect_clicked(move |_| {
+                let url = entry_clone.text();
+                tracing::info!("Sharing URL: {}", url);
+                dialog_clone.close();
+            });
+
+            dialog.present();
+        });
+    }
+
+    // Refresh button → update scanning state
+    {
+        let badge = scan_badge.clone();
+        refresh_btn.connect_clicked(move |_| {
+            badge.set_text("● Scanning...");
+            tracing::info!("Refreshing device discovery...");
+        });
+    }
+
+    // Browse button → open file chooser for browsing connected device
+    {
+        let w = window.clone();
+        btn_browse.connect_clicked(move |_| {
+            let dialog = gtk4::MessageDialog::builder()
+                .transient_for(&w)
+                .modal(true)
+                .message_type(gtk4::MessageType::Info)
+                .buttons(gtk4::ButtonsType::Close)
+                .text("Browse Device Files")
+                .secondary_text("File browser for connected Android device will open here once a pairing is established.")
+                .build();
+            dialog.connect_response(|d, _| d.close());
+            dialog.present();
+        });
+    }
+
+    // Mirror button
+    {
+        let w = window.clone();
+        btn_mirror.connect_clicked(move |_| {
+            let dialog = gtk4::MessageDialog::builder()
+                .transient_for(&w)
+                .modal(true)
+                .message_type(gtk4::MessageType::Info)
+                .buttons(gtk4::ButtonsType::Close)
+                .text("Screen Mirror")
+                .secondary_text("Screen mirroring session will be initiated once a paired Android device is connected.")
+                .build();
+            dialog.connect_response(|d, _| d.close());
+            dialog.present();
+        });
+    }
+
+    // Nav: Shared Files
+    {
+        let w = window.clone();
+        nav_files.connect_clicked(move |_| {
+            let dialog = gtk4::MessageDialog::builder()
+                .transient_for(&w)
+                .modal(true)
+                .message_type(gtk4::MessageType::Info)
+                .buttons(gtk4::ButtonsType::Close)
+                .text("Shared Files")
+                .secondary_text("All files transferred between your Android device and this Linux computer will appear here.")
+                .build();
+            dialog.connect_response(|d, _| d.close());
+            dialog.present();
+        });
+    }
+
+    // Nav: Activity
+    {
+        let w = window.clone();
+        nav_activity.connect_clicked(move |_| {
+            let dialog = gtk4::MessageDialog::builder()
+                .transient_for(&w)
+                .modal(true)
+                .message_type(gtk4::MessageType::Info)
+                .buttons(gtk4::ButtonsType::Close)
+                .text("Activity Log")
+                .secondary_text("Connection events, pairing history, and file transfer logs will appear here.")
+                .build();
+            dialog.connect_response(|d, _| d.close());
+            dialog.present();
+        });
+    }
+
+    // Nav: Settings
+    {
+        let w = window.clone();
+        nav_settings.connect_clicked(move |_| {
+            let dialog = gtk4::MessageDialog::builder()
+                .transient_for(&w)
+                .modal(true)
+                .message_type(gtk4::MessageType::Info)
+                .buttons(gtk4::ButtonsType::Close)
+                .text("Settings")
+                .secondary_text("Configure clipboard sync, file download path, pairing trust, and security options here.")
+                .build();
+            dialog.connect_response(|d, _| d.close());
+            dialog.present();
+        });
+    }
 }
