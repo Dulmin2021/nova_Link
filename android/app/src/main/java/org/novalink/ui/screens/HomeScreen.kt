@@ -18,6 +18,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import org.novalink.core.ConnectionStatus
 import org.novalink.repository.DeviceState
 import org.novalink.ui.theme.*
 
