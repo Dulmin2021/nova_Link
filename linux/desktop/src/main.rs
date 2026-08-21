@@ -4,7 +4,6 @@ use std::sync::Arc;
 use tracing::{info, Level};
 use tracing_subscriber::FmtSubscriber;
 use ipc_client::IpcClient;
-#[allow(unused_imports)]
 use ipc_client::IpcCommand;
 
 #[derive(Clone)]
@@ -59,9 +58,10 @@ fn main() {
 }
 
 #[cfg(feature = "gui")]
-fn build_ui(app: &libadwaita::Application, _ctx: &AppContext) {
+fn build_ui(app: &libadwaita::Application, ctx: &AppContext) {
     use gtk4::prelude::*;
     use libadwaita::prelude::*;
+    use glib;
     use gtk4::{
         Align, Box as GtkBox, Button, Entry, Label, Orientation,
         ScrolledWindow, CssProvider, STYLE_PROVIDER_PRIORITY_APPLICATION, gdk::Display,
@@ -418,9 +418,10 @@ fn build_ui(app: &libadwaita::Application, _ctx: &AppContext) {
     // BUTTON CLICK HANDLERS
     // ==========================================
 
-    // Pair New Device button → show IP connect dialog
+    // Pair New Device button → show IP connect dialog and attempt IPC connection
     {
         let w = window.clone();
+        let ipc = ctx.client.clone();
         pair_btn.connect_clicked(move |_| {
             let dialog = gtk4::Dialog::builder()
                 .title("Pair New Device")
@@ -435,7 +436,7 @@ fn build_ui(app: &libadwaita::Application, _ctx: &AppContext) {
             vbox.set_margin_start(20);
             vbox.set_margin_end(20);
 
-            let label = Label::new(Some("Enter device IP address or Tailscale IP:"));
+            let label = Label::new(Some("Enter Android device IP or Tailscale IP:"));
             label.set_xalign(0.0);
             vbox.append(&label);
 
@@ -443,6 +444,11 @@ fn build_ui(app: &libadwaita::Application, _ctx: &AppContext) {
                 .placeholder_text("e.g. 100.x.x.x or 192.168.1.x")
                 .build();
             vbox.append(&entry);
+
+            let status_label = Label::new(Some(""));
+            status_label.add_css_class("device-subtext");
+            status_label.set_xalign(0.0);
+            vbox.append(&status_label);
 
             let connect_btn = Button::builder()
                 .label("Connect")
@@ -454,11 +460,32 @@ fn build_ui(app: &libadwaita::Application, _ctx: &AppContext) {
 
             let entry_clone = entry.clone();
             let dialog_clone = dialog.clone();
+            let status_clone = status_label.clone();
+            let ipc_clone = ipc.clone();
             connect_btn.connect_clicked(move |_| {
-                let ip = entry_clone.text();
+                let ip = entry_clone.text().to_string();
                 if !ip.is_empty() {
-                    tracing::info!("Connecting to device at IP: {}", ip);
-                    dialog_clone.close();
+                    status_clone.set_text("⏳ Connecting...");
+                    let ipc2 = ipc_clone.clone();
+                    let status2 = status_clone.clone();
+                    let dialog2 = dialog_clone.clone();
+                    // Use glib::spawn_future to run async IPC without blocking the GTK main loop
+                    glib::spawn_future_local(async move {
+                        match ipc2.send_command(IpcCommand::GetStatus).await {
+                            Ok(resp) => {
+                                tracing::info!("IPC daemon status (for IP {}): {}", ip, resp);
+                                status2.set_text("✓ Daemon reachable — use Android app to pair");
+                                glib::timeout_add_seconds_local(2, move || {
+                                    dialog2.close();
+                                    glib::ControlFlow::Break
+                                });
+                            }
+                            Err(e) => {
+                                status2.set_text(&format!("⚠ Daemon not reachable: {}", e));
+                                tracing::warn!("Pair dialog IPC error: {}", e);
+                            }
+                        }
+                    });
                 }
             });
 
@@ -580,12 +607,35 @@ fn build_ui(app: &libadwaita::Application, _ctx: &AppContext) {
         });
     }
 
-    // Refresh button → update scanning state
+    // Refresh button → query daemon for live device list
     {
         let badge = scan_badge.clone();
+        let ipc = ctx.client.clone();
         refresh_btn.connect_clicked(move |_| {
-            badge.set_text("● Scanning...");
-            tracing::info!("Refreshing device discovery...");
+            let badge2 = badge.clone();
+            let ipc2 = ipc.clone();
+            badge2.set_text("● Scanning...");
+            glib::spawn_future_local(async move {
+                match ipc2.send_command(IpcCommand::ListDevices).await {
+                    Ok(resp) => {
+                        tracing::info!("Device refresh: {}", resp);
+                        // Count devices in JSON array response
+                        let count = serde_json::from_str::<serde_json::Value>(&resp)
+                            .ok()
+                            .and_then(|v| v.as_array().map(|a| a.len()))
+                            .unwrap_or(0);
+                        if count > 0 {
+                            badge2.set_text(&format!("● {} device(s) found", count));
+                        } else {
+                            badge2.set_text("● No devices — start nova-daemon");
+                        }
+                    }
+                    Err(e) => {
+                        badge2.set_text("⚠ Daemon offline");
+                        tracing::warn!("Refresh IPC error: {}", e);
+                    }
+                }
+            });
         });
     }
 

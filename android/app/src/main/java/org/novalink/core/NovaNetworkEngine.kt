@@ -2,21 +2,26 @@ package org.novalink.core
 
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
-import kotlinx.serialization.encodeToString
-import kotlinx.serialization.json.Json
-import org.novalink.model.EmptyPayload
-import org.novalink.model.MessageEnvelope
+import kotlinx.coroutines.flow.asStateFlow
 import java.io.InputStream
 import java.io.OutputStream
-import java.net.ServerSocket
 import java.net.Socket
+
+/** Represents the current TCP connection state. */
+sealed class ConnectionStatus {
+    object Disconnected : ConnectionStatus()
+    data class Connecting(val host: String, val port: Int) : ConnectionStatus()
+    data class Connected(val host: String, val port: Int) : ConnectionStatus()
+    data class Error(val host: String, val message: String) : ConnectionStatus()
+}
 
 class NovaNetworkEngine(
     private val scope: CoroutineScope
 ) {
-    private val json = Json { ignoreUnknownKeys = true }
     private var activeSocket: Socket? = null
     private var inputStream: InputStream? = null
     private var outputStream: OutputStream? = null
@@ -24,33 +29,27 @@ class NovaNetworkEngine(
     private val _incomingMessages = MutableSharedFlow<ByteArray>()
     val incomingMessages: SharedFlow<ByteArray> = _incomingMessages.asSharedFlow()
 
+    private val _connectionStatus = MutableStateFlow<ConnectionStatus>(ConnectionStatus.Disconnected)
+    val connectionStatus: StateFlow<ConnectionStatus> = _connectionStatus.asStateFlow()
+
     fun connectToHost(host: String, port: Int) {
+        disconnect()
+        _connectionStatus.value = ConnectionStatus.Connecting(host, port)
+
         scope.launch(Dispatchers.IO) {
             try {
                 val socket = Socket(host, port)
+                socket.keepAlive = true
+                socket.soTimeout = 0
                 activeSocket = socket
                 inputStream = socket.getInputStream()
                 outputStream = socket.getOutputStream()
+                _connectionStatus.value = ConnectionStatus.Connected(host, port)
                 startReadLoop()
             } catch (e: Exception) {
+                val msg = e.message ?: "Unknown connection error"
+                _connectionStatus.value = ConnectionStatus.Error(host, msg)
                 disconnect()
-            }
-        }
-    }
-
-    fun startServer(port: Int) {
-        scope.launch(Dispatchers.IO) {
-            val server = ServerSocket(port)
-            while (isActive) {
-                try {
-                    val socket = server.accept()
-                    activeSocket = socket
-                    inputStream = socket.getInputStream()
-                    outputStream = socket.getOutputStream()
-                    startReadLoop()
-                } catch (e: Exception) {
-                    if (!isActive) break
-                }
             }
         }
     }
@@ -65,12 +64,28 @@ class NovaNetworkEngine(
                 break
             }
         }
+        val prev = _connectionStatus.value
+        val host = when (prev) {
+            is ConnectionStatus.Connected -> prev.host
+            is ConnectionStatus.Connecting -> prev.host
+            else -> "unknown"
+        }
+        _connectionStatus.value = ConnectionStatus.Error(host, "Connection lost")
         disconnect()
     }
 
-    suspend fun sendFrame(payload: ByteArray) = withContext(Dispatchers.IO) {
-        val out = outputStream ?: throw IllegalStateException("Socket output stream is not available")
-        NovaFrameCodec.encodeFrame(payload, out)
+    /**
+     * Sends a framed payload. Returns Result so callers handle errors gracefully.
+     */
+    suspend fun sendFrame(payload: ByteArray): Result<Unit> = withContext(Dispatchers.IO) {
+        val out = outputStream
+            ?: return@withContext Result.failure(IllegalStateException("Not connected to any device"))
+        return@withContext try {
+            NovaFrameCodec.encodeFrame(payload, out)
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
     }
 
     fun disconnect() {
@@ -87,3 +102,4 @@ class NovaNetworkEngine(
         }
     }
 }
+

@@ -27,12 +27,20 @@ fun HomeScreen(
     devices: List<DeviceState>,
     onPairClicked: (DeviceState) -> Unit,
     onSendFileClicked: (DeviceState) -> Unit,
-    onSendTextClicked: (DeviceState) -> Unit,
-    onDirectConnect: (String, Int) -> Unit = { _, _ -> }
+    onSendText: (String) -> Unit = { _ -> },
+    onSendUrl: (String) -> Unit = { _ -> },
+    onDirectConnect: (String, Int) -> Unit = { _, _ -> },
+    connectionStatusLabel: String? = null
 ) {
     var showDirectConnectDialog by remember { mutableStateOf(false) }
     var directIp by remember { mutableStateOf("") }
     var searchQuery by remember { mutableStateOf("") }
+    var showSendTextDialog by remember { mutableStateOf(false) }
+    var showSendUrlDialog by remember { mutableStateOf(false) }
+    var sendTextInput by remember { mutableStateOf("") }
+    var sendUrlInput by remember { mutableStateOf("") }
+    // Which device the quick-action dialog targets
+    var quickActionDevice by remember { mutableStateOf<DeviceState?>(null) }
 
     if (showDirectConnectDialog) {
         AlertDialog(
@@ -78,6 +86,95 @@ fun HomeScreen(
         )
     }
 
+    // ---- Send Text Dialog ----
+    if (showSendTextDialog) {
+        AlertDialog(
+            onDismissRequest = { showSendTextDialog = false; sendTextInput = "" },
+            title = { Text("Send Text", fontWeight = FontWeight.Bold) },
+            text = {
+                Column {
+                    Text(
+                        text = "Enter text to send to your Linux device:",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = NovaSlateMuted,
+                        modifier = Modifier.padding(bottom = 8.dp)
+                    )
+                    OutlinedTextField(
+                        value = sendTextInput,
+                        onValueChange = { sendTextInput = it },
+                        label = { Text("Your message") },
+                        minLines = 3,
+                        maxLines = 6,
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        if (sendTextInput.isNotBlank()) {
+                            onSendText(sendTextInput)
+                        }
+                        showSendTextDialog = false
+                        sendTextInput = ""
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = NovaDeepBlue),
+                    shape = RoundedCornerShape(8.dp)
+                ) { Text("Send", color = Color.White) }
+            },
+            dismissButton = {
+                TextButton(onClick = { showSendTextDialog = false; sendTextInput = "" }) {
+                    Text("Cancel", color = NovaSlateMuted)
+                }
+            }
+        )
+    }
+
+    // ---- Send URL Dialog ----
+    if (showSendUrlDialog) {
+        AlertDialog(
+            onDismissRequest = { showSendUrlDialog = false; sendUrlInput = "" },
+            title = { Text("Share URL", fontWeight = FontWeight.Bold) },
+            text = {
+                Column {
+                    Text(
+                        text = "Paste a URL to send to your Linux device:",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = NovaSlateMuted,
+                        modifier = Modifier.padding(bottom = 8.dp)
+                    )
+                    OutlinedTextField(
+                        value = sendUrlInput,
+                        onValueChange = { sendUrlInput = it },
+                        label = { Text("URL (e.g. https://...)") },
+                        singleLine = true,
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        if (sendUrlInput.isNotBlank()) {
+                            onSendUrl(sendUrlInput)
+                        }
+                        showSendUrlDialog = false
+                        sendUrlInput = ""
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = NovaDeepBlue),
+                    shape = RoundedCornerShape(8.dp)
+                ) { Text("Share", color = Color.White) }
+            },
+            dismissButton = {
+                TextButton(onClick = { showSendUrlDialog = false; sendUrlInput = "" }) {
+                    Text("Cancel", color = NovaSlateMuted)
+                }
+            }
+        )
+    }
+
     Scaffold(
         topBar = {
             Column(
@@ -92,12 +189,25 @@ fun HomeScreen(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text(
-                        text = "Dashboard",
-                        fontSize = 22.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = NovaSlateDark
-                    )
+                    Column {
+                        Text(
+                            text = "Dashboard",
+                            fontSize = 22.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = NovaSlateDark
+                        )
+                        if (connectionStatusLabel != null) {
+                            Text(
+                                text = connectionStatusLabel,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = if (connectionStatusLabel.startsWith("✓")) NovaMintGreen
+                                        else if (connectionStatusLabel.startsWith("⚠")) Color(0xFFD97706)
+                                        else NovaSlateMuted,
+                                modifier = Modifier.padding(top = 2.dp)
+                            )
+                        }
+                    }
 
                     Row(
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -196,7 +306,11 @@ fun HomeScreen(
                         .weight(1f)
                         .clickable {
                             val activeDev = devices.firstOrNull { it.isConnected } ?: devices.firstOrNull()
-                            if (activeDev != null) onSendFileClicked(activeDev)
+                            if (activeDev != null) {
+                                onSendFileClicked(activeDev)
+                            } else {
+                                showDirectConnectDialog = true
+                            }
                         },
                     shape = RoundedCornerShape(12.dp),
                     color = NovaDeepBlue
@@ -230,7 +344,13 @@ fun HomeScreen(
                         .weight(1f)
                         .clickable {
                             val activeDev = devices.firstOrNull { it.isConnected } ?: devices.firstOrNull()
-                            if (activeDev != null) onSendTextClicked(activeDev)
+                            if (activeDev != null) {
+                                quickActionDevice = activeDev
+                                sendTextInput = ""
+                                showSendTextDialog = true
+                            } else {
+                                showDirectConnectDialog = true
+                            }
                         },
                     shape = RoundedCornerShape(12.dp),
                     color = NovaCardBg,
@@ -259,13 +379,19 @@ fun HomeScreen(
                     }
                 }
 
-                // Card 3: Send URL (Pale Wheat Secondary)
+                // Card 3: Send URL (Pale Wheat Secondary) — was wrongly calling onSendTextClicked, now fixed
                 Surface(
                     modifier = Modifier
                         .weight(1f)
                         .clickable {
                             val activeDev = devices.firstOrNull { it.isConnected } ?: devices.firstOrNull()
-                            if (activeDev != null) onSendTextClicked(activeDev)
+                            if (activeDev != null) {
+                                quickActionDevice = activeDev
+                                sendUrlInput = ""
+                                showSendUrlDialog = true
+                            } else {
+                                showDirectConnectDialog = true
+                            }
                         },
                     shape = RoundedCornerShape(12.dp),
                     color = NovaCardBg,
@@ -358,8 +484,8 @@ fun HomeScreen(
                         DashboardDeviceCard(
                             device = device,
                             onPairClicked = { onPairClicked(device) },
-                            onSendFileClicked = { onSendFileClicked(device) },
-                            onSendTextClicked = { onSendTextClicked(device) }
+                            onBrowseClicked = { onSendFileClicked(device) },
+                            onMirrorClicked = { /* future: open screen mirror */ }
                         )
                     }
                 }
@@ -372,8 +498,8 @@ fun HomeScreen(
 fun DashboardDeviceCard(
     device: DeviceState,
     onPairClicked: () -> Unit,
-    onSendFileClicked: () -> Unit,
-    onSendTextClicked: () -> Unit
+    onBrowseClicked: () -> Unit,
+    onMirrorClicked: () -> Unit
 ) {
     Surface(
         modifier = Modifier.fillMaxWidth(),
@@ -471,7 +597,7 @@ fun DashboardDeviceCard(
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     OutlinedButton(
-                        onClick = onSendFileClicked,
+                        onClick = onBrowseClicked,
                         modifier = Modifier.weight(1f),
                         shape = RoundedCornerShape(8.dp),
                         border = BorderStroke(1.dp, NovaSlateBorder)
@@ -479,7 +605,7 @@ fun DashboardDeviceCard(
                         Text("📁  Browse", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = NovaSlateDark)
                     }
                     OutlinedButton(
-                        onClick = onSendTextClicked,
+                        onClick = onMirrorClicked,
                         modifier = Modifier.weight(1f),
                         shape = RoundedCornerShape(8.dp),
                         border = BorderStroke(1.dp, NovaSlateBorder)

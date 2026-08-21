@@ -26,6 +26,10 @@ version = "0.6"
 features = ["v1_5"]
 optional = true
 
+[dependencies.glib]
+version = "0.20"
+optional = true
+
 [features]
 default = []
-gui = ["dep:gtk4", "dep:libadwaita"]
+gui = ["dep:gtk4", "dep:libadwaita", "dep:glib"]

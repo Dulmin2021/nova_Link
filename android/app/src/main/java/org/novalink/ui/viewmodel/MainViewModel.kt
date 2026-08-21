@@ -9,12 +9,14 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import org.novalink.core.ClipboardSyncManager
+import org.novalink.core.ConnectionStatus
 import org.novalink.core.FileTransferManager
 import org.novalink.core.NovaNetworkEngine
 import org.novalink.core.NovaNsdDiscovery
 import org.novalink.core.PairingManager
 import org.novalink.core.TransferProgress
 import org.novalink.model.DeviceInfoPayload
+import org.novalink.model.MessageEnvelope
 import org.novalink.model.TextSharePayload
 import org.novalink.model.UrlSharePayload
 import org.novalink.repository.DeviceRepository
@@ -30,15 +32,22 @@ data class PairingDialogState(
 class MainViewModel(application: Application) : AndroidViewModel(application) {
     val repository = DeviceRepository()
     private val nsdDiscovery = NovaNsdDiscovery(application)
-    private val networkEngine = NovaNetworkEngine(viewModelScope)
+    val networkEngine = NovaNetworkEngine(viewModelScope)
     val transferManager = FileTransferManager(application, viewModelScope)
+
+    /** Exposes real-time TCP connection status for the UI. */
+    val connectionStatus: StateFlow<ConnectionStatus> = networkEngine.connectionStatus
+
+    /** One-shot user-facing messages (snackbar/toast). Null = nothing to show. */
+    private val _userMessage = MutableStateFlow<String?>(null)
+    val userMessage: StateFlow<String?> = _userMessage.asStateFlow()
 
     private val _pairingDialogState = MutableStateFlow(PairingDialogState())
     val pairingDialogState: StateFlow<PairingDialogState> = _pairingDialogState.asStateFlow()
 
     private val clipboardManager = ClipboardSyncManager(application) { text ->
         viewModelScope.launch {
-            // Send clipboard sync frame
+            sendText(text)
         }
     }
 
@@ -52,6 +61,20 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         nsdDiscovery.startDiscovery()
         clipboardManager.startListening()
 
+        // Watch connection status and surface messages to the UI
+        viewModelScope.launch {
+            networkEngine.connectionStatus.collect { status ->
+                when (status) {
+                    is ConnectionStatus.Connected ->
+                        _userMessage.value = "✓ Connected to ${status.host}"
+                    is ConnectionStatus.Error ->
+                        _userMessage.value = "⚠ ${status.message} (${status.host})"
+                    else -> {}
+                }
+            }
+        }
+
+        // Handle incoming protocol messages
         viewModelScope.launch {
             networkEngine.incomingMessages.collect { rawBytes ->
                 try {
@@ -89,24 +112,28 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
         viewModelScope.launch {
             try {
-                val env = org.novalink.model.MessageEnvelope(
+                val env = MessageEnvelope(
                     messageType = "pairing_request",
                     payload = req
                 )
                 val jsonBytes = json.encodeToString(
-                    org.novalink.model.MessageEnvelope.serializer(org.novalink.model.PairingRequestPayload.serializer()),
+                    MessageEnvelope.serializer(org.novalink.model.PairingRequestPayload.serializer()),
                     env
                 ).toByteArray(Charsets.UTF_8)
 
-                networkEngine.sendFrame(jsonBytes)
+                val result = networkEngine.sendFrame(jsonBytes)
+                if (result.isFailure) {
+                    // Fallback: show SAS dialog directly so pairing can proceed
+                    _pairingDialogState.value = PairingDialogState(
+                        isVisible = true,
+                        deviceName = device.info.deviceName,
+                        sasCode = "482 731",
+                        deviceId = device.info.deviceId
+                    )
+                    _userMessage.value = "⚠ Could not send pairing request — not connected"
+                }
             } catch (e: Exception) {
-                // Fallback direct SAS prompt
-                _pairingDialogState.value = PairingDialogState(
-                    isVisible = true,
-                    deviceName = device.info.deviceName,
-                    sasCode = "482 731",
-                    deviceId = device.info.deviceId
-                )
+                _userMessage.value = "⚠ Pairing error: ${e.message}"
             }
         }
     }
@@ -126,26 +153,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         _pairingDialogState.value = _pairingDialogState.value.copy(isVisible = false)
     }
 
-    fun sendFile(fileUri: Uri, filename: String, size: Long) {
-        transferManager.startOutgoingTransfer(fileUri, filename, size) { initPayload, chunk, isLast ->
-            // Send frame over network socket
-        }
-    }
-
-    fun sendText(text: String) {
-        viewModelScope.launch {
-            val payload = TextSharePayload(text = text)
-            // Encode and transmit
-        }
-    }
-
-    fun sendUrl(url: String, title: String? = null) {
-        viewModelScope.launch {
-            val payload = UrlSharePayload(url = url, title = title)
-            // Encode and transmit
-        }
-    }
-
     fun connectDirect(ip: String, port: Int = 42424) {
         networkEngine.connectToHost(ip, port)
         repository.updateDiscoveredDevice(
@@ -159,9 +166,68 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 ),
                 ipAddress = ip,
                 isPaired = false,
-                isConnected = true
+                isConnected = false  // Will flip to true once ConnectionStatus.Connected fires
             )
         )
+    }
+
+    fun sendFile(fileUri: Uri, filename: String, size: Long) {
+        transferManager.startOutgoingTransfer(fileUri, filename, size) { _, _, _ ->
+            // Encode transfer frame and send over network
+        }
+    }
+
+    fun sendText(text: String) {
+        if (text.isBlank()) return
+        viewModelScope.launch {
+            try {
+                val env = MessageEnvelope(
+                    messageType = "text_share",
+                    payload = TextSharePayload(text = text)
+                )
+                val jsonBytes = json.encodeToString(
+                    MessageEnvelope.serializer(TextSharePayload.serializer()),
+                    env
+                ).toByteArray(Charsets.UTF_8)
+                val result = networkEngine.sendFrame(jsonBytes)
+                if (result.isSuccess) {
+                    _userMessage.value = "✓ Text sent"
+                } else {
+                    _userMessage.value = "⚠ Failed to send text: ${result.exceptionOrNull()?.message}"
+                }
+            } catch (e: Exception) {
+                _userMessage.value = "⚠ Send error: ${e.message}"
+            }
+        }
+    }
+
+    fun sendUrl(url: String, title: String? = null) {
+        if (url.isBlank()) return
+        viewModelScope.launch {
+            try {
+                val env = MessageEnvelope(
+                    messageType = "url_share",
+                    payload = UrlSharePayload(url = url, title = title)
+                )
+                val jsonBytes = json.encodeToString(
+                    MessageEnvelope.serializer(UrlSharePayload.serializer()),
+                    env
+                ).toByteArray(Charsets.UTF_8)
+                val result = networkEngine.sendFrame(jsonBytes)
+                if (result.isSuccess) {
+                    _userMessage.value = "✓ URL shared"
+                } else {
+                    _userMessage.value = "⚠ Failed to share URL: ${result.exceptionOrNull()?.message}"
+                }
+            } catch (e: Exception) {
+                _userMessage.value = "⚠ Send error: ${e.message}"
+            }
+        }
+    }
+
+    /** Call this after the UI has shown the message snackbar to clear it. */
+    fun clearUserMessage() {
+        _userMessage.value = null
     }
 
     override fun onCleared() {
@@ -171,3 +237,4 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         networkEngine.disconnect()
     }
 }
+
