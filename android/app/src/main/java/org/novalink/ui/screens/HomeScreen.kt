@@ -30,7 +30,7 @@ fun HomeScreen(
     onSendText: (String) -> Unit = { _ -> },
     onSendUrl: (String) -> Unit = { _ -> },
     onDirectConnect: (String, Int) -> Unit = { _, _ -> },
-    connectionStatusLabel: String? = null
+    connectionStatus: ConnectionStatus = ConnectionStatus.Disconnected
 ) {
     var showDirectConnectDialog by remember { mutableStateOf(false) }
     var directIp by remember { mutableStateOf("") }
@@ -39,8 +39,10 @@ fun HomeScreen(
     var showSendUrlDialog by remember { mutableStateOf(false) }
     var sendTextInput by remember { mutableStateOf("") }
     var sendUrlInput by remember { mutableStateOf("") }
-    // Which device the quick-action dialog targets
     var quickActionDevice by remember { mutableStateOf<DeviceState?>(null) }
+
+    val hasPairedDevice = devices.any { it.isPaired }
+    val activeDevice = devices.firstOrNull { it.isConnected } ?: devices.firstOrNull()
 
     if (showDirectConnectDialog) {
         AlertDialog(
@@ -49,7 +51,7 @@ fun HomeScreen(
             text = {
                 Column {
                     Text(
-                        text = "Enter your Azure VM or Tailscale IP address:",
+                        text = "Enter your Linux PC or Azure/Tailscale IP address:",
                         style = MaterialTheme.typography.bodyMedium,
                         color = NovaSlateMuted,
                         modifier = Modifier.padding(bottom = 8.dp)
@@ -191,21 +193,47 @@ fun HomeScreen(
                 ) {
                     Column {
                         Text(
-                            text = "Dashboard",
+                            text = "NOVA-Link",
                             fontSize = 22.sp,
                             fontWeight = FontWeight.Bold,
                             color = NovaSlateDark
                         )
-                        if (connectionStatusLabel != null) {
-                            Text(
-                                text = connectionStatusLabel,
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.SemiBold,
-                                color = if (connectionStatusLabel.startsWith("✓")) NovaMintGreen
-                                        else if (connectionStatusLabel.startsWith("⚠")) Color(0xFFD97706)
-                                        else NovaSlateMuted,
-                                modifier = Modifier.padding(top = 2.dp)
-                            )
+                        when (val s = connectionStatus) {
+                            is ConnectionStatus.Connecting -> {
+                                Text(
+                                    text = "⏳ Connecting to ${s.host}…",
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = NovaDeepBlue,
+                                    modifier = Modifier.padding(top = 2.dp)
+                                )
+                            }
+                            is ConnectionStatus.Connected -> {
+                                Text(
+                                    text = "✓ Connected to ${s.host}",
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = NovaMintGreen,
+                                    modifier = Modifier.padding(top = 2.dp)
+                                )
+                            }
+                            is ConnectionStatus.Error -> {
+                                Text(
+                                    text = "⚠ ${s.message}",
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = Color(0xFFD97706),
+                                    modifier = Modifier.padding(top = 2.dp)
+                                )
+                            }
+                            is ConnectionStatus.Disconnected -> {
+                                Text(
+                                    text = "Ready to connect",
+                                    fontSize = 11.sp,
+                                    color = NovaSlateMuted,
+                                    modifier = Modifier.padding(top = 2.dp)
+                                )
+                            }
                         }
                     }
 
@@ -236,14 +264,6 @@ fun HomeScreen(
                                 .clickable { /* refresh */ }
                                 .padding(4.dp)
                         )
-                        Text(
-                            text = "🔋",
-                            fontSize = 18.sp,
-                            modifier = Modifier
-                                .clip(CircleShape)
-                                .clickable { }
-                                .padding(4.dp)
-                        )
                     }
                 }
                 Divider(color = NovaSlateBorder, thickness = 1.dp)
@@ -261,12 +281,24 @@ fun HomeScreen(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
+                    val statusText = when (connectionStatus) {
+                        is ConnectionStatus.Connected -> "📶 Local Network: Connected"
+                        is ConnectionStatus.Connecting -> "🔄 Establishing Connection..."
+                        is ConnectionStatus.Error -> "⚠ Connection Interrupted"
+                        is ConnectionStatus.Disconnected -> "📡 Ready to Connect"
+                    }
+                    val statusColor = when (connectionStatus) {
+                        is ConnectionStatus.Connected -> NovaMintGreen
+                        is ConnectionStatus.Connecting -> NovaDeepBlue
+                        is ConnectionStatus.Error -> Color(0xFFD97706)
+                        is ConnectionStatus.Disconnected -> NovaSlateMuted
+                    }
                     Text(
-                        text = "📶 Local Network: Connected",
+                        text = statusText,
                         fontFamily = FontFamily.Monospace,
                         fontSize = 11.sp,
                         fontWeight = FontWeight.SemiBold,
-                        color = NovaMintGreen
+                        color = statusColor
                     )
                     Text(
                         text = "NOVA-Link v2.4.1 | Encrypted",
@@ -285,198 +317,242 @@ fun HomeScreen(
                 .padding(paddingValues)
                 .padding(horizontal = 20.dp, vertical = 16.dp)
         ) {
-            // ==========================================
-            // 1. QUICK ACTIONS SECTION
-            // ==========================================
-            Text(
-                text = "Quick Actions",
-                fontSize = 16.sp,
-                fontWeight = FontWeight.Bold,
-                color = NovaSlateDark,
-                modifier = Modifier.padding(bottom = 12.dp)
-            )
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                // Card 1: Send File (Deep Blue Primary)
-                Surface(
-                    modifier = Modifier
-                        .weight(1f)
-                        .clickable {
-                            val activeDev = devices.firstOrNull { it.isConnected } ?: devices.firstOrNull()
-                            if (activeDev != null) {
-                                onSendFileClicked(activeDev)
-                            } else {
-                                showDirectConnectDialog = true
-                            }
-                        },
-                    shape = RoundedCornerShape(12.dp),
-                    color = NovaDeepBlue
-                ) {
-                    Column(
-                        modifier = Modifier.padding(vertical = 18.dp, horizontal = 8.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .size(40.dp)
-                                .clip(CircleShape)
-                                .background(Color.White.copy(alpha = 0.2f)),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text("📤", fontSize = 18.sp)
-                        }
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Text(
-                            text = "Send File",
-                            fontSize = 13.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = Color.White
-                        )
-                    }
-                }
-
-                // Card 2: Send Text (Pale Blue Secondary)
-                Surface(
-                    modifier = Modifier
-                        .weight(1f)
-                        .clickable {
-                            val activeDev = devices.firstOrNull { it.isConnected } ?: devices.firstOrNull()
-                            if (activeDev != null) {
-                                quickActionDevice = activeDev
-                                sendTextInput = ""
-                                showSendTextDialog = true
-                            } else {
-                                showDirectConnectDialog = true
-                            }
-                        },
-                    shape = RoundedCornerShape(12.dp),
-                    color = NovaCardBg,
-                    border = BorderStroke(1.dp, NovaSlateBorder)
-                ) {
-                    Column(
-                        modifier = Modifier.padding(vertical = 18.dp, horizontal = 8.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .size(40.dp)
-                                .clip(CircleShape)
-                                .background(NovaIconBlueCircle),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text("💬", fontSize = 18.sp)
-                        }
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Text(
-                            text = "Send Text",
-                            fontSize = 13.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = NovaSlateDark
-                        )
-                    }
-                }
-
-                // Card 3: Send URL (Pale Wheat Secondary) — was wrongly calling onSendTextClicked, now fixed
-                Surface(
-                    modifier = Modifier
-                        .weight(1f)
-                        .clickable {
-                            val activeDev = devices.firstOrNull { it.isConnected } ?: devices.firstOrNull()
-                            if (activeDev != null) {
-                                quickActionDevice = activeDev
-                                sendUrlInput = ""
-                                showSendUrlDialog = true
-                            } else {
-                                showDirectConnectDialog = true
-                            }
-                        },
-                    shape = RoundedCornerShape(12.dp),
-                    color = NovaCardBg,
-                    border = BorderStroke(1.dp, NovaSlateBorder)
-                ) {
-                    Column(
-                        modifier = Modifier.padding(vertical = 18.dp, horizontal = 8.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .size(40.dp)
-                                .clip(CircleShape)
-                                .background(NovaIconWheatCircle),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text("🔗", fontSize = 18.sp)
-                        }
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Text(
-                            text = "Send URL",
-                            fontSize = 13.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = NovaSlateDark
-                        )
-                    }
-                }
-            }
-
-            Spacer(modifier = Modifier.height(24.dp))
-
-            // ==========================================
-            // 2. NEARBY DEVICES SECTION
-            // ==========================================
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(bottom = 12.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = "Nearby Devices",
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = NovaSlateDark
-                )
-                Text(
-                    text = "● Scanning active",
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    color = NovaMintGreen
-                )
-            }
-
-            if (devices.isEmpty()) {
+            // STATE 1: Disconnected with no devices -> Show Onboarding CTA Screen
+            if (connectionStatus is ConnectionStatus.Disconnected && devices.isEmpty()) {
                 Surface(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(top = 8.dp),
-                    shape = RoundedCornerShape(12.dp),
+                        .padding(vertical = 12.dp),
+                    shape = RoundedCornerShape(16.dp),
                     color = Color.White,
                     border = BorderStroke(1.dp, NovaSlateBorder)
                 ) {
                     Column(
-                        modifier = Modifier.padding(32.dp),
+                        modifier = Modifier.padding(24.dp),
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
-                        Text("📡", fontSize = 32.sp)
-                        Spacer(modifier = Modifier.height(8.dp))
+                        Box(
+                            modifier = Modifier
+                                .size(64.dp)
+                                .clip(CircleShape)
+                                .background(NovaCardBg),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text("⚡", fontSize = 32.sp)
+                        }
+                        Spacer(modifier = Modifier.height(16.dp))
                         Text(
-                            text = "No devices detected nearby",
-                            fontSize = 14.sp,
+                            text = "Connect to your PC",
+                            fontSize = 18.sp,
                             fontWeight = FontWeight.Bold,
                             color = NovaSlateDark
                         )
-                        Spacer(modifier = Modifier.height(4.dp))
+                        Spacer(modifier = Modifier.height(6.dp))
                         Text(
-                            text = "Tap 'Direct IP' in top right to connect to your Azure VM or PC",
-                            fontSize = 12.sp,
+                            text = "Link your Android phone and Linux computer for secure file sharing, clipboard sync, and text sharing.",
+                            fontSize = 13.sp,
+                            color = NovaSlateMuted,
+                            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                            lineHeight = 18.sp
+                        )
+                        Spacer(modifier = Modifier.height(20.dp))
+                        Button(
+                            onClick = { showDirectConnectDialog = true },
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = ButtonDefaults.buttonColors(containerColor = NovaDeepBlue),
+                            shape = RoundedCornerShape(10.dp),
+                            contentPadding = PaddingValues(vertical = 12.dp)
+                        ) {
+                            Text("🔗  Enter Tailscale / Direct IP", fontWeight = FontWeight.Bold)
+                        }
+                        Spacer(modifier = Modifier.height(8.dp))
+                        OutlinedButton(
+                            onClick = { /* mDNS scan */ },
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(10.dp),
+                            border = BorderStroke(1.dp, NovaSlateBorder),
+                            contentPadding = PaddingValues(vertical = 12.dp)
+                        ) {
+                            Text("📡  Scan Local Wi-Fi Network", color = NovaSlateDark, fontWeight = FontWeight.SemiBold)
+                        }
+                    }
+                }
+            } else {
+                // ==========================================
+                // 1. QUICK ACTIONS SECTION (State-Aware)
+                // ==========================================
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 12.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "Quick Actions",
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = NovaSlateDark
+                    )
+                    if (!hasPairedDevice && activeDevice != null) {
+                        Text(
+                            text = "🔒 Pair device to unlock",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.SemiBold,
                             color = NovaSlateMuted
                         )
                     }
                 }
-            } else {
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    // Card 1: Send File
+                    Surface(
+                        modifier = Modifier
+                            .weight(1f)
+                            .clickable {
+                                if (activeDevice != null) {
+                                    onSendFileClicked(activeDevice)
+                                } else {
+                                    showDirectConnectDialog = true
+                                }
+                            },
+                        shape = RoundedCornerShape(12.dp),
+                        color = if (hasPairedDevice) NovaDeepBlue else NovaCardBg,
+                        border = if (hasPairedDevice) null else BorderStroke(1.dp, NovaSlateBorder)
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(vertical = 18.dp, horizontal = 8.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(40.dp)
+                                    .clip(CircleShape)
+                                    .background(if (hasPairedDevice) Color.White.copy(alpha = 0.2f) else NovaIconBlueCircle),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text("📤", fontSize = 18.sp)
+                            }
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text(
+                                text = "Send File",
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = if (hasPairedDevice) Color.White else NovaSlateDark
+                            )
+                        }
+                    }
+
+                    // Card 2: Send Text
+                    Surface(
+                        modifier = Modifier
+                            .weight(1f)
+                            .clickable {
+                                if (activeDevice != null) {
+                                    quickActionDevice = activeDevice
+                                    sendTextInput = ""
+                                    showSendTextDialog = true
+                                } else {
+                                    showDirectConnectDialog = true
+                                }
+                            },
+                        shape = RoundedCornerShape(12.dp),
+                        color = NovaCardBg,
+                        border = BorderStroke(1.dp, NovaSlateBorder)
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(vertical = 18.dp, horizontal = 8.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(40.dp)
+                                    .clip(CircleShape)
+                                    .background(NovaIconBlueCircle),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text("💬", fontSize = 18.sp)
+                            }
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text(
+                                text = "Send Text",
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = NovaSlateDark
+                            )
+                        }
+                    }
+
+                    // Card 3: Send URL
+                    Surface(
+                        modifier = Modifier
+                            .weight(1f)
+                            .clickable {
+                                if (activeDevice != null) {
+                                    quickActionDevice = activeDevice
+                                    sendUrlInput = ""
+                                    showSendUrlDialog = true
+                                } else {
+                                    showDirectConnectDialog = true
+                                }
+                            },
+                        shape = RoundedCornerShape(12.dp),
+                        color = NovaCardBg,
+                        border = BorderStroke(1.dp, NovaSlateBorder)
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(vertical = 18.dp, horizontal = 8.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(40.dp)
+                                    .clip(CircleShape)
+                                    .background(NovaIconWheatCircle),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text("🔗", fontSize = 18.sp)
+                            }
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text(
+                                text = "Send URL",
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = NovaSlateDark
+                            )
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(24.dp))
+
+                // ==========================================
+                // 2. NEARBY DEVICES SECTION
+                // ==========================================
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 12.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "Devices",
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = NovaSlateDark
+                    )
+                    Text(
+                        text = if (connectionStatus is ConnectionStatus.Connected) "● Connected" else "● Scanning active",
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = NovaMintGreen
+                    )
+                }
+
                 LazyColumn(
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
@@ -485,7 +561,7 @@ fun HomeScreen(
                             device = device,
                             onPairClicked = { onPairClicked(device) },
                             onBrowseClicked = { onSendFileClicked(device) },
-                            onMirrorClicked = { /* future: open screen mirror */ }
+                            onMirrorClicked = { /* mirror action */ }
                         )
                     }
                 }

@@ -228,3 +228,68 @@ window {
     color: #10B981;
     font-weight: 600;
 }
+
+/* State-Aware UI Components */
+.daemon-warning-banner {
+    background-color: #FEF2F2;
+    border-bottom: 1px solid #FCA5A5;
+    padding: 12px 24px;
+    color: #991B1B;
+}
+
+.daemon-warning-text {
+    font-size: 13px;
+    font-weight: 600;
+    color: #B91C1C;
+}
+
+.connect-cta-box {
+    background-color: #FFFFFF;
+    border: 2px dashed #CBD5E1;
+    border-radius: 16px;
+    padding: 32px 24px;
+}
+
+.connect-cta-title {
+    font-size: 18px;
+    font-weight: 700;
+    color: #0F172A;
+}
+
+.connect-cta-desc {
+    font-size: 13px;
+    color: #64748B;
+    line-height: 1.5;
+}
+
+.ip-highlight-box {
+    background-color: #F1F5F9;
+    border: 1px solid #E2E8F0;
+    border-radius: 10px;
+    padding: 10px 16px;
+}
+
+.ip-highlight-text {
+    font-family: monospace;
+    font-size: 14px;
+    font-weight: 700;
+    color: #006097;
+}
+
+.badge-pairing {
+    background-color: #FEF3C7;
+    color: #B45309;
+    font-size: 11px;
+    font-weight: 700;
+    border-radius: 12px;
+    padding: 2px 8px;
+}
+
+.quick-action-disabled {
+    background-color: #F8FAFC;
+    color: #94A3B8;
+    border-radius: 12px;
+    padding: 24px 16px;
+    border: 1px dashed #CBD5E1;
+    opacity: 0.6;
+}

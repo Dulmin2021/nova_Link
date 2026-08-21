@@ -80,7 +80,7 @@ class MainActivity : ComponentActivity() {
                         onSendText = { text -> viewModel.sendText(text) },
                         onSendUrl = { url -> viewModel.sendUrl(url) },
                         onDirectConnect = { ip, port -> viewModel.connectDirect(ip, port) },
-                        connectionStatusLabel = statusLabel
+                        connectionStatus = connectionStatus
                     )
 
                     if (pairingState.isVisible) {

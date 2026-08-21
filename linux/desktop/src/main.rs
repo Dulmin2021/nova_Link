@@ -88,6 +88,27 @@ fn build_ui(app: &libadwaita::Application, ctx: &AppContext) {
 
     let root_box = GtkBox::new(Orientation::Vertical, 0);
 
+    // ------------------------------------------
+    // 0. TOP DAEMON WARNING BANNER (State-Aware)
+    // ------------------------------------------
+    let daemon_banner = GtkBox::new(Orientation::Horizontal, 12);
+    daemon_banner.add_css_class("daemon-warning-banner");
+    daemon_banner.set_visible(false); // Hidden by default, shown if daemon offline
+
+    let warn_icon = Label::new(Some("⚠"));
+    let warn_msg = Label::new(Some("Background daemon (nova-daemon) is offline. Start it in terminal: 'cargo run --bin nova-daemon'"));
+    warn_msg.add_css_class("daemon-warning-text");
+    warn_msg.set_hexpand(true);
+    warn_msg.set_xalign(0.0);
+
+    let retry_btn = Button::with_label("🔄 Retry");
+    retry_btn.add_css_class("device-action-button");
+
+    daemon_banner.append(&warn_icon);
+    daemon_banner.append(&warn_msg);
+    daemon_banner.append(&retry_btn);
+    root_box.append(&daemon_banner);
+
     // ==========================================
     // MAIN 2-COLUMN BODY (Sidebar + Dashboard)
     // ==========================================
@@ -721,6 +742,83 @@ fn build_ui(app: &libadwaita::Application, ctx: &AppContext) {
                 .build();
             dialog.connect_response(|d, _| d.close());
             dialog.present();
+        });
+    }
+
+    // ==========================================
+    // BACKGROUND DAEMON STATUS POLLING (State-Aware)
+    // ==========================================
+    {
+        let banner = daemon_banner.clone();
+        let badge = scan_badge.clone();
+        let net = net_lbl.clone();
+        let ipc = ctx.client.clone();
+
+        let check_status = move || {
+            let banner2 = banner.clone();
+            let badge2 = badge.clone();
+            let net2 = net.clone();
+            let ipc2 = ipc.clone();
+
+            glib::spawn_future_local(async move {
+                match ipc2.send_command(IpcCommand::GetStatus).await {
+                    Ok(_) => {
+                        banner2.set_visible(false);
+                        net2.set_text("📶 Local Network: Daemon Active (Port 42424)");
+                        // Check devices
+                        if let Ok(dev_resp) = ipc2.send_command(IpcCommand::ListDevices).await {
+                            let count = serde_json::from_str::<serde_json::Value>(&dev_resp)
+                                .ok()
+                                .and_then(|v| v.as_array().map(|a| a.len()))
+                                .unwrap_or(0);
+                            if count > 0 {
+                                badge2.set_text(&format!("● {} device(s) connected", count));
+                            } else {
+                                badge2.set_text("● Ready for mobile connection");
+                            }
+                        }
+                    }
+                    Err(_) => {
+                        banner2.set_visible(true);
+                        badge2.set_text("⚠ Daemon offline");
+                        net2.set_text("⚠ Daemon Offline — start with 'cargo run --bin nova-daemon'");
+                    }
+                }
+            });
+        };
+
+        // Check immediately on startup
+        check_status();
+
+        // Retry button click
+        retry_btn.connect_clicked(move |_| {
+            check_status();
+        });
+
+        // Periodic check every 4 seconds
+        let ipc_timer = ctx.client.clone();
+        let banner_timer = daemon_banner.clone();
+        let badge_timer = scan_badge.clone();
+        let net_timer = net_lbl.clone();
+
+        glib::timeout_add_seconds_local(4, move || {
+            let banner2 = banner_timer.clone();
+            let badge2 = badge_timer.clone();
+            let net2 = net_timer.clone();
+            let ipc2 = ipc_timer.clone();
+
+            glib::spawn_future_local(async move {
+                if let Ok(_) = ipc2.send_command(IpcCommand::GetStatus).await {
+                    banner2.set_visible(false);
+                    net2.set_text("📶 Local Network: Daemon Active (Port 42424)");
+                } else {
+                    banner2.set_visible(true);
+                    badge2.set_text("⚠ Daemon offline");
+                    net2.set_text("⚠ Daemon Offline — start with 'cargo run --bin nova-daemon'");
+                }
+            });
+
+            glib::ControlFlow::Continue
         });
     }
 }
