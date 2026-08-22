@@ -75,6 +75,29 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                         if (dev != null) {
                             repository.updateDiscoveredDevice(dev.copy(isConnected = true))
                         }
+
+                        // Immediately announce phone name and ID to Linux daemon
+                        viewModelScope.launch {
+                            try {
+                                val infoEnv = MessageEnvelope(
+                                    messageType = "device_info",
+                                    payload = DeviceInfoPayload(
+                                        deviceId = localDeviceId,
+                                        deviceName = localDeviceName,
+                                        deviceType = "android",
+                                        protocolVersion = 1,
+                                        capabilities = listOf("file_transfer", "clipboard", "url_share")
+                                    )
+                                )
+                                val jsonBytes = json.encodeToString(
+                                    MessageEnvelope.serializer(DeviceInfoPayload.serializer()),
+                                    infoEnv
+                                ).toByteArray(Charsets.UTF_8)
+                                networkEngine.sendFrame(jsonBytes)
+                            } catch (e: Exception) {
+                                // Ignore
+                            }
+                        }
                     }
                     is ConnectionStatus.Error -> {
                         _userMessage.value = "⚠ ${status.message} (${status.host})"

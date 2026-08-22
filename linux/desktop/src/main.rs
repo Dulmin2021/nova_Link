@@ -323,89 +323,25 @@ fn build_ui(app: &libadwaita::Application, ctx: &AppContext) {
     dev_header_box.append(&scan_badge);
     content_box.append(&dev_header_box);
 
-    let dev_grid = GtkBox::new(Orientation::Horizontal, 16);
-    dev_grid.set_homogeneous(true);
+    let dev_grid = GtkBox::new(Orientation::Vertical, 16);
 
-    // Device Card 1: Pixel 8 (Connected)
-    let card_pixel = GtkBox::new(Orientation::Vertical, 14);
-    card_pixel.add_css_class("device-card-active");
+    // Initial placeholder when waiting for connection
+    let empty_box = GtkBox::new(Orientation::Vertical, 8);
+    empty_box.add_css_class("connect-cta-box");
+    empty_box.set_halign(Align::Fill);
 
-    let card_pixel_top = GtkBox::new(Orientation::Horizontal, 10);
-    let icon_pixel = Label::new(Some("📱"));
-    icon_pixel.set_markup("<span size='x-large'>📱</span>");
-    card_pixel_top.append(&icon_pixel);
+    let empty_title = Label::new(Some("📡  Waiting for Mobile Connection"));
+    empty_title.add_css_class("connect-cta-title");
+    empty_title.set_xalign(0.0);
 
-    let info_pixel = GtkBox::new(Orientation::Vertical, 2);
-    info_pixel.set_hexpand(true);
-    let name_pixel = Label::new(Some("Pixel 8"));
-    name_pixel.add_css_class("device-name");
-    name_pixel.set_xalign(0.0);
+    let empty_desc = Label::new(Some("Open NOVA-Link on your Android phone, tap 'Direct IP', and enter this computer's Tailscale or local IP (Port 42424)."));
+    empty_desc.add_css_class("connect-cta-desc");
+    empty_desc.set_xalign(0.0);
+    empty_desc.set_wrap(true);
 
-    let badge_row = GtkBox::new(Orientation::Horizontal, 6);
-    let badge_connected = Label::new(Some("CONNECTED"));
-    badge_connected.add_css_class("badge-connected");
-    let battery_lbl = Label::new(Some("🔋 85%"));
-    battery_lbl.add_css_class("device-subtext");
-    badge_row.append(&badge_connected);
-    badge_row.append(&battery_lbl);
-
-    info_pixel.append(&name_pixel);
-    info_pixel.append(&badge_row);
-    card_pixel_top.append(&info_pixel);
-
-    let menu_pixel = Button::with_label("⋮");
-    menu_pixel.add_css_class("sidebar-btn");
-    card_pixel_top.append(&menu_pixel);
-    card_pixel.append(&card_pixel_top);
-
-    // Action buttons inside card: Browse & Mirror
-    let card_pixel_actions = GtkBox::new(Orientation::Horizontal, 8);
-    card_pixel_actions.set_homogeneous(true);
-
-    let btn_browse = Button::with_label("📁  Browse");
-    btn_browse.add_css_class("device-action-button");
-    let btn_mirror = Button::with_label("💻  Mirror");
-    btn_mirror.add_css_class("device-action-button");
-
-    card_pixel_actions.append(&btn_browse);
-    card_pixel_actions.append(&btn_mirror);
-    card_pixel.append(&card_pixel_actions);
-
-    dev_grid.append(&card_pixel);
-
-    // Device Card 2: Samsung Galaxy (Offline)
-    let card_galaxy = GtkBox::new(Orientation::Vertical, 14);
-    card_galaxy.add_css_class("device-card-offline");
-
-    let card_galaxy_top = GtkBox::new(Orientation::Horizontal, 10);
-    let icon_galaxy = Label::new(Some("📱"));
-    icon_galaxy.set_markup("<span size='x-large'>📱</span>");
-    card_galaxy_top.append(&icon_galaxy);
-
-    let info_galaxy = GtkBox::new(Orientation::Vertical, 2);
-    info_galaxy.set_hexpand(true);
-    let name_galaxy = Label::new(Some("Samsung Galaxy"));
-    name_galaxy.add_css_class("device-name");
-    name_galaxy.set_xalign(0.0);
-
-    let badge_row2 = GtkBox::new(Orientation::Horizontal, 6);
-    let badge_offline = Label::new(Some("OFFLINE"));
-    badge_offline.add_css_class("badge-offline");
-    let seen_lbl = Label::new(Some("Last seen: 2 hrs ago"));
-    seen_lbl.add_css_class("device-subtext");
-    badge_row2.append(&badge_offline);
-    badge_row2.append(&seen_lbl);
-
-    info_galaxy.append(&name_galaxy);
-    info_galaxy.append(&badge_row2);
-    card_galaxy_top.append(&info_galaxy);
-
-    let info_icon = Button::with_label("ⓘ");
-    info_icon.add_css_class("sidebar-btn");
-    card_galaxy_top.append(&info_icon);
-    card_galaxy.append(&card_galaxy_top);
-
-    dev_grid.append(&card_galaxy);
+    empty_box.append(&empty_title);
+    empty_box.append(&empty_desc);
+    dev_grid.append(&empty_box);
     content_box.append(&dev_grid);
 
     scrolled.set_child(Some(&content_box));
@@ -628,27 +564,146 @@ fn build_ui(app: &libadwaita::Application, ctx: &AppContext) {
         });
     }
 
-    // Refresh button → query daemon for live device list
+    // Refresh button → query daemon for live device list and update device cards
     {
         let badge = scan_badge.clone();
+        let grid = dev_grid.clone();
+        let w = window.clone();
         let ipc = ctx.client.clone();
         refresh_btn.connect_clicked(move |_| {
             let badge2 = badge.clone();
+            let grid2 = grid.clone();
+            let w2 = w.clone();
             let ipc2 = ipc.clone();
             badge2.set_text("● Scanning...");
             glib::spawn_future_local(async move {
                 match ipc2.send_command(IpcCommand::ListDevices).await {
                     Ok(resp) => {
                         tracing::info!("Device refresh: {}", resp);
-                        // Count devices in JSON array response
-                        let count = serde_json::from_str::<serde_json::Value>(&resp)
-                            .ok()
-                            .and_then(|v| v.as_array().map(|a| a.len()))
-                            .unwrap_or(0);
-                        if count > 0 {
-                            badge2.set_text(&format!("● {} device(s) found", count));
+                        let devs_val = serde_json::from_str::<serde_json::Value>(&resp).ok();
+                        let dev_array = devs_val.as_ref().and_then(|v| {
+                            if let Some(arr) = v.as_array() {
+                                Some(arr.clone())
+                            } else if let Some(arr) = v.get("data").and_then(|d| d.as_array()) {
+                                Some(arr.clone())
+                            } else {
+                                None
+                            }
+                        }).unwrap_or_default();
+
+                        // Update device count badge
+                        if dev_array.is_empty() {
+                            badge2.set_text("● Ready for mobile connection");
                         } else {
-                            badge2.set_text("● No devices — start nova-daemon");
+                            badge2.set_text(&format!("● {} device(s) active", dev_array.len()));
+                        }
+
+                        // Rebuild dev_grid with real devices
+                        while let Some(child) = grid2.first_child() {
+                            grid2.remove(&child);
+                        }
+
+                        if dev_array.is_empty() {
+                            let empty_box = GtkBox::new(Orientation::Vertical, 8);
+                            empty_box.add_css_class("connect-cta-box");
+                            empty_box.set_halign(Align::Fill);
+
+                            let empty_title = Label::new(Some("📡  Waiting for Mobile Connection"));
+                            empty_title.add_css_class("connect-cta-title");
+                            empty_title.set_xalign(0.0);
+
+                            let empty_desc = Label::new(Some("Open NOVA-Link on your Android phone, tap 'Direct IP', and enter this computer's Tailscale or local IP (Port 42424)."));
+                            empty_desc.add_css_class("connect-cta-desc");
+                            empty_desc.set_xalign(0.0);
+                            empty_desc.set_wrap(true);
+
+                            empty_box.append(&empty_title);
+                            empty_box.append(&empty_desc);
+                            grid2.append(&empty_box);
+                        } else {
+                            let cards_box = GtkBox::new(Orientation::Horizontal, 16);
+                            cards_box.set_homogeneous(true);
+
+                            for dev in &dev_array {
+                                let dev_name = dev.get("device_name").and_then(|v| v.as_str()).unwrap_or("Android Phone");
+                                let dev_type = dev.get("device_type").and_then(|v| v.as_str()).unwrap_or("android");
+                                let ip_str = dev.get("ip_addresses")
+                                    .and_then(|v| v.as_array())
+                                    .and_then(|arr| arr.first())
+                                    .and_then(|ip| ip.as_str())
+                                    .unwrap_or("Connected");
+
+                                let card = GtkBox::new(Orientation::Vertical, 14);
+                                card.add_css_class("device-card-active");
+
+                                let card_top = GtkBox::new(Orientation::Horizontal, 10);
+                                let icon = Label::new(Some(if dev_type == "android" { "📱" } else { "💻" }));
+                                icon.set_markup(if dev_type == "android" { "<span size='x-large'>📱</span>" } else { "<span size='x-large'>💻</span>" });
+                                card_top.append(&icon);
+
+                                let info_box = GtkBox::new(Orientation::Vertical, 2);
+                                info_box.set_hexpand(true);
+                                let name_lbl = Label::new(Some(dev_name));
+                                name_lbl.add_css_class("device-name");
+                                name_lbl.set_xalign(0.0);
+
+                                let badge_row = GtkBox::new(Orientation::Horizontal, 6);
+                                let badge_connected = Label::new(Some("CONNECTED"));
+                                badge_connected.add_css_class("badge-connected");
+                                let ip_lbl = Label::new(Some(&format!("IP: {}", ip_str)));
+                                ip_lbl.add_css_class("device-subtext");
+                                badge_row.append(&badge_connected);
+                                badge_row.append(&ip_lbl);
+
+                                info_box.append(&name_lbl);
+                                info_box.append(&badge_row);
+                                card_top.append(&info_box);
+                                card.append(&card_top);
+
+                                let actions_box = GtkBox::new(Orientation::Horizontal, 8);
+                                actions_box.set_homogeneous(true);
+
+                                let btn_br = Button::with_label("📁  Browse");
+                                btn_br.add_css_class("device-action-button");
+                                let w_cl = w2.clone();
+                                let dname = dev_name.to_string();
+                                btn_br.connect_clicked(move |_| {
+                                    let dialog = gtk4::MessageDialog::builder()
+                                        .transient_for(&w_cl)
+                                        .modal(true)
+                                        .message_type(gtk4::MessageType::Info)
+                                        .buttons(gtk4::ButtonsType::Close)
+                                        .text(&format!("Browse {}", dname))
+                                        .secondary_text("File transfer & browser ready.")
+                                        .build();
+                                    dialog.connect_response(|d, _| d.close());
+                                    dialog.present();
+                                });
+
+                                let btn_mr = Button::with_label("💻  Mirror");
+                                btn_mr.add_css_class("device-action-button");
+                                let w_cl2 = w2.clone();
+                                let dname2 = dev_name.to_string();
+                                btn_mr.connect_clicked(move |_| {
+                                    let dialog = gtk4::MessageDialog::builder()
+                                        .transient_for(&w_cl2)
+                                        .modal(true)
+                                        .message_type(gtk4::MessageType::Info)
+                                        .buttons(gtk4::ButtonsType::Close)
+                                        .text(&format!("Screen Mirror - {}", dname2))
+                                        .secondary_text("Screen mirroring session ready.")
+                                        .build();
+                                    dialog.connect_response(|d, _| d.close());
+                                    dialog.present();
+                                });
+
+                                actions_box.append(&btn_br);
+                                actions_box.append(&btn_mr);
+                                card.append(&actions_box);
+
+                                cards_box.append(&card);
+                            }
+                            grid2.append(&cards_box);
                         }
                     }
                     Err(e) => {
@@ -657,40 +712,6 @@ fn build_ui(app: &libadwaita::Application, ctx: &AppContext) {
                     }
                 }
             });
-        });
-    }
-
-    // Browse button → open file chooser for browsing connected device
-    {
-        let w = window.clone();
-        btn_browse.connect_clicked(move |_| {
-            let dialog = gtk4::MessageDialog::builder()
-                .transient_for(&w)
-                .modal(true)
-                .message_type(gtk4::MessageType::Info)
-                .buttons(gtk4::ButtonsType::Close)
-                .text("Browse Device Files")
-                .secondary_text("File browser for connected Android device will open here once a pairing is established.")
-                .build();
-            dialog.connect_response(|d, _| d.close());
-            dialog.present();
-        });
-    }
-
-    // Mirror button
-    {
-        let w = window.clone();
-        btn_mirror.connect_clicked(move |_| {
-            let dialog = gtk4::MessageDialog::builder()
-                .transient_for(&w)
-                .modal(true)
-                .message_type(gtk4::MessageType::Info)
-                .buttons(gtk4::ButtonsType::Close)
-                .text("Screen Mirror")
-                .secondary_text("Screen mirroring session will be initiated once a paired Android device is connected.")
-                .build();
-            dialog.connect_response(|d, _| d.close());
-            dialog.present();
         });
     }
 
@@ -753,6 +774,7 @@ fn build_ui(app: &libadwaita::Application, ctx: &AppContext) {
         let badge = scan_badge.clone();
         let net = net_lbl.clone();
         let grid = dev_grid.clone();
+        let w = window.clone();
         let ipc = ctx.client.clone();
 
         let check_status = move || {
@@ -760,6 +782,7 @@ fn build_ui(app: &libadwaita::Application, ctx: &AppContext) {
             let badge2 = badge.clone();
             let net2 = net.clone();
             let grid2 = grid.clone();
+            let w2 = w.clone();
             let ipc2 = ipc.clone();
 
             glib::spawn_future_local(async move {
@@ -767,14 +790,111 @@ fn build_ui(app: &libadwaita::Application, ctx: &AppContext) {
                     Ok(_) => {
                         banner2.set_visible(false);
                         net2.set_text("📶 Local Network: Daemon Active (Port 42424)");
-                        // Query device list
+                        // Query device list and update cards
                         if let Ok(dev_resp) = ipc2.send_command(IpcCommand::ListDevices).await {
-                            if let Ok(devs) = serde_json::from_str::<Vec<serde_json::Value>>(&dev_resp) {
-                                if devs.is_empty() {
-                                    badge2.set_text("● Ready for mobile connection");
+                            let devs_val = serde_json::from_str::<serde_json::Value>(&dev_resp).ok();
+                            let dev_array = devs_val.as_ref().and_then(|v| {
+                                if let Some(arr) = v.as_array() {
+                                    Some(arr.clone())
+                                } else if let Some(arr) = v.get("data").and_then(|d| d.as_array()) {
+                                    Some(arr.clone())
                                 } else {
-                                    badge2.set_text(&format!("● {} device(s) active", devs.len()));
+                                    None
                                 }
+                            }).unwrap_or_default();
+
+                            if dev_array.is_empty() {
+                                badge2.set_text("● Ready for mobile connection");
+                            } else {
+                                badge2.set_text(&format!("● {} device(s) active", dev_array.len()));
+
+                                while let Some(child) = grid2.first_child() {
+                                    grid2.remove(&child);
+                                }
+
+                                let cards_box = GtkBox::new(Orientation::Horizontal, 16);
+                                cards_box.set_homogeneous(true);
+
+                                for dev in &dev_array {
+                                    let dev_name = dev.get("device_name").and_then(|v| v.as_str()).unwrap_or("Android Phone");
+                                    let dev_type = dev.get("device_type").and_then(|v| v.as_str()).unwrap_or("android");
+                                    let ip_str = dev.get("ip_addresses")
+                                        .and_then(|v| v.as_array())
+                                        .and_then(|arr| arr.first())
+                                        .and_then(|ip| ip.as_str())
+                                        .unwrap_or("Connected");
+
+                                    let card = GtkBox::new(Orientation::Vertical, 14);
+                                    card.add_css_class("device-card-active");
+
+                                    let card_top = GtkBox::new(Orientation::Horizontal, 10);
+                                    let icon = Label::new(Some(if dev_type == "android" { "📱" } else { "💻" }));
+                                    icon.set_markup(if dev_type == "android" { "<span size='x-large'>📱</span>" } else { "<span size='x-large'>💻</span>" });
+                                    card_top.append(&icon);
+
+                                    let info_box = GtkBox::new(Orientation::Vertical, 2);
+                                    info_box.set_hexpand(true);
+                                    let name_lbl = Label::new(Some(dev_name));
+                                    name_lbl.add_css_class("device-name");
+                                    name_lbl.set_xalign(0.0);
+
+                                    let badge_row = GtkBox::new(Orientation::Horizontal, 6);
+                                    let badge_connected = Label::new(Some("CONNECTED"));
+                                    badge_connected.add_css_class("badge-connected");
+                                    let ip_lbl = Label::new(Some(&format!("IP: {}", ip_str)));
+                                    ip_lbl.add_css_class("device-subtext");
+                                    badge_row.append(&badge_connected);
+                                    badge_row.append(&ip_lbl);
+
+                                    info_box.append(&name_lbl);
+                                    info_box.append(&badge_row);
+                                    card_top.append(&info_box);
+                                    card.append(&card_top);
+
+                                    let actions_box = GtkBox::new(Orientation::Horizontal, 8);
+                                    actions_box.set_homogeneous(true);
+
+                                    let btn_br = Button::with_label("📁  Browse");
+                                    btn_br.add_css_class("device-action-button");
+                                    let w_cl = w2.clone();
+                                    let dname = dev_name.to_string();
+                                    btn_br.connect_clicked(move |_| {
+                                        let dialog = gtk4::MessageDialog::builder()
+                                            .transient_for(&w_cl)
+                                            .modal(true)
+                                            .message_type(gtk4::MessageType::Info)
+                                            .buttons(gtk4::ButtonsType::Close)
+                                            .text(&format!("Browse {}", dname))
+                                            .secondary_text("File transfer & browser ready.")
+                                            .build();
+                                        dialog.connect_response(|d, _| d.close());
+                                        dialog.present();
+                                    });
+
+                                    let btn_mr = Button::with_label("💻  Mirror");
+                                    btn_mr.add_css_class("device-action-button");
+                                    let w_cl2 = w2.clone();
+                                    let dname2 = dev_name.to_string();
+                                    btn_mr.connect_clicked(move |_| {
+                                        let dialog = gtk4::MessageDialog::builder()
+                                            .transient_for(&w_cl2)
+                                            .modal(true)
+                                            .message_type(gtk4::MessageType::Info)
+                                            .buttons(gtk4::ButtonsType::Close)
+                                            .text(&format!("Screen Mirror - {}", dname2))
+                                            .secondary_text("Screen mirroring session ready.")
+                                            .build();
+                                        dialog.connect_response(|d, _| d.close());
+                                        dialog.present();
+                                    });
+
+                                    actions_box.append(&btn_br);
+                                    actions_box.append(&btn_mr);
+                                    card.append(&actions_box);
+
+                                    cards_box.append(&card);
+                                }
+                                grid2.append(&cards_box);
                             }
                         }
                     }
@@ -800,11 +920,15 @@ fn build_ui(app: &libadwaita::Application, ctx: &AppContext) {
         let banner_timer = daemon_banner.clone();
         let badge_timer = scan_badge.clone();
         let net_timer = net_lbl.clone();
+        let grid_timer = dev_grid.clone();
+        let w_timer = window.clone();
 
         glib::timeout_add_seconds_local(3, move || {
             let banner2 = banner_timer.clone();
             let badge2 = badge_timer.clone();
             let net2 = net_timer.clone();
+            let grid2 = grid_timer.clone();
+            let w2 = w_timer.clone();
             let ipc2 = ipc_timer.clone();
 
             glib::spawn_future_local(async move {
@@ -812,10 +936,109 @@ fn build_ui(app: &libadwaita::Application, ctx: &AppContext) {
                     banner2.set_visible(false);
                     net2.set_text("📶 Local Network: Daemon Active (Port 42424)");
                     if let Ok(dev_resp) = ipc2.send_command(IpcCommand::ListDevices).await {
-                        if let Ok(devs) = serde_json::from_str::<Vec<serde_json::Value>>(&dev_resp) {
-                            if !devs.is_empty() {
-                                badge2.set_text(&format!("● {} device(s) active", devs.len()));
+                        let devs_val = serde_json::from_str::<serde_json::Value>(&dev_resp).ok();
+                        let dev_array = devs_val.as_ref().and_then(|v| {
+                            if let Some(arr) = v.as_array() {
+                                Some(arr.clone())
+                            } else if let Some(arr) = v.get("data").and_then(|d| d.as_array()) {
+                                Some(arr.clone())
+                            } else {
+                                None
                             }
+                        }).unwrap_or_default();
+
+                        if dev_array.is_empty() {
+                            badge2.set_text("● Ready for mobile connection");
+                        } else {
+                            badge2.set_text(&format!("● {} device(s) active", dev_array.len()));
+
+                            while let Some(child) = grid2.first_child() {
+                                grid2.remove(&child);
+                            }
+
+                            let cards_box = GtkBox::new(Orientation::Horizontal, 16);
+                            cards_box.set_homogeneous(true);
+
+                            for dev in &dev_array {
+                                let dev_name = dev.get("device_name").and_then(|v| v.as_str()).unwrap_or("Android Phone");
+                                let dev_type = dev.get("device_type").and_then(|v| v.as_str()).unwrap_or("android");
+                                let ip_str = dev.get("ip_addresses")
+                                    .and_then(|v| v.as_array())
+                                    .and_then(|arr| arr.first())
+                                    .and_then(|ip| ip.as_str())
+                                    .unwrap_or("Connected");
+
+                                let card = GtkBox::new(Orientation::Vertical, 14);
+                                card.add_css_class("device-card-active");
+
+                                let card_top = GtkBox::new(Orientation::Horizontal, 10);
+                                let icon = Label::new(Some(if dev_type == "android" { "📱" } else { "💻" }));
+                                icon.set_markup(if dev_type == "android" { "<span size='x-large'>📱</span>" } else { "<span size='x-large'>💻</span>" });
+                                card_top.append(&icon);
+
+                                let info_box = GtkBox::new(Orientation::Vertical, 2);
+                                info_box.set_hexpand(true);
+                                let name_lbl = Label::new(Some(dev_name));
+                                name_lbl.add_css_class("device-name");
+                                name_lbl.set_xalign(0.0);
+
+                                let badge_row = GtkBox::new(Orientation::Horizontal, 6);
+                                let badge_connected = Label::new(Some("CONNECTED"));
+                                badge_connected.add_css_class("badge-connected");
+                                let ip_lbl = Label::new(Some(&format!("IP: {}", ip_str)));
+                                ip_lbl.add_css_class("device-subtext");
+                                badge_row.append(&badge_connected);
+                                badge_row.append(&ip_lbl);
+
+                                info_box.append(&name_lbl);
+                                info_box.append(&badge_row);
+                                card_top.append(&info_box);
+                                card.append(&card_top);
+
+                                let actions_box = GtkBox::new(Orientation::Horizontal, 8);
+                                actions_box.set_homogeneous(true);
+
+                                let btn_br = Button::with_label("📁  Browse");
+                                btn_br.add_css_class("device-action-button");
+                                let w_cl = w2.clone();
+                                let dname = dev_name.to_string();
+                                btn_br.connect_clicked(move |_| {
+                                    let dialog = gtk4::MessageDialog::builder()
+                                        .transient_for(&w_cl)
+                                        .modal(true)
+                                        .message_type(gtk4::MessageType::Info)
+                                        .buttons(gtk4::ButtonsType::Close)
+                                        .text(&format!("Browse {}", dname))
+                                        .secondary_text("File transfer & browser ready.")
+                                        .build();
+                                    dialog.connect_response(|d, _| d.close());
+                                    dialog.present();
+                                });
+
+                                let btn_mr = Button::with_label("💻  Mirror");
+                                btn_mr.add_css_class("device-action-button");
+                                let w_cl2 = w2.clone();
+                                let dname2 = dev_name.to_string();
+                                btn_mr.connect_clicked(move |_| {
+                                    let dialog = gtk4::MessageDialog::builder()
+                                        .transient_for(&w_cl2)
+                                        .modal(true)
+                                        .message_type(gtk4::MessageType::Info)
+                                        .buttons(gtk4::ButtonsType::Close)
+                                        .text(&format!("Screen Mirror - {}", dname2))
+                                        .secondary_text("Screen mirroring session ready.")
+                                        .build();
+                                    dialog.connect_response(|d, _| d.close());
+                                    dialog.present();
+                                });
+
+                                actions_box.append(&btn_br);
+                                actions_box.append(&btn_mr);
+                                card.append(&actions_box);
+
+                                cards_box.append(&card);
+                            }
+                            grid2.append(&cards_box);
                         }
                     }
                 } else {

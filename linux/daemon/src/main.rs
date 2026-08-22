@@ -68,6 +68,23 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     let mut session = TransportSession::new(socket, remote_addr);
                     let st = Arc::clone(&tcp_state);
 
+                    // Register initial peer entry in peer_tracker
+                    {
+                        use nova_core::discovery::DiscoveredDevice;
+                        use nova_core::protocol::DeviceType;
+                        let mut guard = st.write().await;
+                        guard.peer_tracker.update(DiscoveredDevice {
+                            device_id: uuid::Uuid::new_v4(),
+                            device_name: format!("Android ({})", remote_addr.ip()),
+                            device_type: DeviceType::Android,
+                            ip_addresses: vec![remote_addr.ip()],
+                            port: remote_addr.port(),
+                            protocol_version: 1,
+                            capabilities: vec!["file_transfer".into(), "clipboard".into(), "url_share".into()],
+                            public_key_fingerprint: None,
+                        });
+                    }
+
                     tokio::spawn(async move {
                         use nova_core::protocol::{
                             DeviceInfoPayload, DeviceType, MessageEnvelope, PairingRequestPayload,
