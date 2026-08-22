@@ -752,12 +752,14 @@ fn build_ui(app: &libadwaita::Application, ctx: &AppContext) {
         let banner = daemon_banner.clone();
         let badge = scan_badge.clone();
         let net = net_lbl.clone();
+        let grid = dev_grid.clone();
         let ipc = ctx.client.clone();
 
         let check_status = move || {
             let banner2 = banner.clone();
             let badge2 = badge.clone();
             let net2 = net.clone();
+            let grid2 = grid.clone();
             let ipc2 = ipc.clone();
 
             glib::spawn_future_local(async move {
@@ -765,16 +767,14 @@ fn build_ui(app: &libadwaita::Application, ctx: &AppContext) {
                     Ok(_) => {
                         banner2.set_visible(false);
                         net2.set_text("📶 Local Network: Daemon Active (Port 42424)");
-                        // Check devices
+                        // Query device list
                         if let Ok(dev_resp) = ipc2.send_command(IpcCommand::ListDevices).await {
-                            let count = serde_json::from_str::<serde_json::Value>(&dev_resp)
-                                .ok()
-                                .and_then(|v| v.as_array().map(|a| a.len()))
-                                .unwrap_or(0);
-                            if count > 0 {
-                                badge2.set_text(&format!("● {} device(s) connected", count));
-                            } else {
-                                badge2.set_text("● Ready for mobile connection");
+                            if let Ok(devs) = serde_json::from_str::<Vec<serde_json::Value>>(&dev_resp) {
+                                if devs.is_empty() {
+                                    badge2.set_text("● Ready for mobile connection");
+                                } else {
+                                    badge2.set_text(&format!("● {} device(s) active", devs.len()));
+                                }
                             }
                         }
                     }
@@ -795,13 +795,13 @@ fn build_ui(app: &libadwaita::Application, ctx: &AppContext) {
             check_status();
         });
 
-        // Periodic check every 4 seconds
+        // Periodic check every 3 seconds
         let ipc_timer = ctx.client.clone();
         let banner_timer = daemon_banner.clone();
         let badge_timer = scan_badge.clone();
         let net_timer = net_lbl.clone();
 
-        glib::timeout_add_seconds_local(4, move || {
+        glib::timeout_add_seconds_local(3, move || {
             let banner2 = banner_timer.clone();
             let badge2 = badge_timer.clone();
             let net2 = net_timer.clone();
@@ -811,6 +811,13 @@ fn build_ui(app: &libadwaita::Application, ctx: &AppContext) {
                 if let Ok(_) = ipc2.send_command(IpcCommand::GetStatus).await {
                     banner2.set_visible(false);
                     net2.set_text("📶 Local Network: Daemon Active (Port 42424)");
+                    if let Ok(dev_resp) = ipc2.send_command(IpcCommand::ListDevices).await {
+                        if let Ok(devs) = serde_json::from_str::<Vec<serde_json::Value>>(&dev_resp) {
+                            if !devs.is_empty() {
+                                badge2.set_text(&format!("● {} device(s) active", devs.len()));
+                            }
+                        }
+                    }
                 } else {
                     banner2.set_visible(true);
                     badge2.set_text("⚠ Daemon offline");

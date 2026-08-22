@@ -17,6 +17,9 @@ import org.novalink.core.PairingManager
 import org.novalink.core.TransferProgress
 import org.novalink.model.DeviceInfoPayload
 import org.novalink.model.MessageEnvelope
+import org.novalink.model.PairingConfirmPayload
+import org.novalink.model.PairingRequestPayload
+import org.novalink.model.PairingResponsePayload
 import org.novalink.model.TextSharePayload
 import org.novalink.model.UrlSharePayload
 import org.novalink.repository.DeviceRepository
@@ -61,14 +64,34 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         nsdDiscovery.startDiscovery()
         clipboardManager.startListening()
 
-        // Watch connection status and surface messages to the UI
+        // Watch connection status and surface messages to the UI and update device state
         viewModelScope.launch {
             networkEngine.connectionStatus.collect { status ->
                 when (status) {
-                    is ConnectionStatus.Connected ->
+                    is ConnectionStatus.Connected -> {
                         _userMessage.value = "✓ Connected to ${status.host}"
-                    is ConnectionStatus.Error ->
+                        val currentList = repository.devices.value
+                        val dev = currentList.find { it.ipAddress == status.host || it.info.deviceId.contains(status.host) }
+                        if (dev != null) {
+                            repository.updateDiscoveredDevice(dev.copy(isConnected = true))
+                        }
+                    }
+                    is ConnectionStatus.Error -> {
                         _userMessage.value = "⚠ ${status.message} (${status.host})"
+                        val currentList = repository.devices.value
+                        val dev = currentList.find { it.ipAddress == status.host || it.info.deviceId.contains(status.host) }
+                        if (dev != null) {
+                            repository.updateDiscoveredDevice(dev.copy(isConnected = false))
+                        }
+                    }
+                    is ConnectionStatus.Disconnected -> {
+                        val currentList = repository.devices.value
+                        currentList.forEach { d ->
+                            if (d.isConnected) {
+                                repository.updateDiscoveredDevice(d.copy(isConnected = false))
+                            }
+                        }
+                    }
                     else -> {}
                 }
             }
@@ -80,12 +103,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 try {
                     val envelopeString = String(rawBytes, Charsets.UTF_8)
                     if (envelopeString.contains("pairing_response")) {
-                        val env = json.decodeFromString<org.novalink.model.MessageEnvelope<org.novalink.model.PairingResponsePayload>>(envelopeString)
+                        val env = json.decodeFromString<MessageEnvelope<PairingResponsePayload>>(envelopeString)
                         val resp = env.payload
                         val pm = currentPairingManager
                         if (pm != null) {
-                            val peerIdBytes = ByteArray(32) { 0x01 }
-                            val sas = pm.handlePairingResponse(resp, localIdentityBytes, peerIdBytes)
+                            val sas = pm.handlePairingResponse(resp, localIdentityBytes)
                             _pairingDialogState.value = PairingDialogState(
                                 isVisible = true,
                                 deviceName = resp.deviceName,
@@ -117,20 +139,15 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     payload = req
                 )
                 val jsonBytes = json.encodeToString(
-                    MessageEnvelope.serializer(org.novalink.model.PairingRequestPayload.serializer()),
+                    MessageEnvelope.serializer(PairingRequestPayload.serializer()),
                     env
                 ).toByteArray(Charsets.UTF_8)
 
                 val result = networkEngine.sendFrame(jsonBytes)
                 if (result.isFailure) {
-                    // Fallback: show SAS dialog directly so pairing can proceed
-                    _pairingDialogState.value = PairingDialogState(
-                        isVisible = true,
-                        deviceName = device.info.deviceName,
-                        sasCode = "482 731",
-                        deviceId = device.info.deviceId
-                    )
                     _userMessage.value = "⚠ Could not send pairing request — not connected"
+                } else {
+                    _userMessage.value = "⏳ Pairing request sent to ${device.info.deviceName}..."
                 }
             } catch (e: Exception) {
                 _userMessage.value = "⚠ Pairing error: ${e.message}"
@@ -147,10 +164,50 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         if (dev != null) {
             repository.updateDiscoveredDevice(dev.copy(isPaired = true, isConnected = true))
         }
+
+        viewModelScope.launch {
+            try {
+                val env = MessageEnvelope(
+                    messageType = "pairing_confirm",
+                    payload = PairingConfirmPayload(
+                        accepted = true,
+                        signature = "confirmed"
+                    )
+                )
+                val jsonBytes = json.encodeToString(
+                    MessageEnvelope.serializer(PairingConfirmPayload.serializer()),
+                    env
+                ).toByteArray(Charsets.UTF_8)
+                val res = networkEngine.sendFrame(jsonBytes)
+                if (res.isSuccess) {
+                    _userMessage.value = "✓ Paired with ${dev?.info?.deviceName ?: "device"}"
+                }
+            } catch (e: Exception) {
+                _userMessage.value = "⚠ Confirmation error: ${e.message}"
+            }
+        }
     }
 
     fun rejectPairing() {
         _pairingDialogState.value = _pairingDialogState.value.copy(isVisible = false)
+        viewModelScope.launch {
+            try {
+                val env = MessageEnvelope(
+                    messageType = "pairing_confirm",
+                    payload = PairingConfirmPayload(
+                        accepted = false,
+                        signature = "rejected"
+                    )
+                )
+                val jsonBytes = json.encodeToString(
+                    MessageEnvelope.serializer(PairingConfirmPayload.serializer()),
+                    env
+                ).toByteArray(Charsets.UTF_8)
+                networkEngine.sendFrame(jsonBytes)
+            } catch (e: Exception) {
+                // Ignore
+            }
+        }
     }
 
     fun connectDirect(ip: String, port: Int = 42424) {

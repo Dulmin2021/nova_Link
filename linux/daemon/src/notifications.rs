@@ -39,4 +39,27 @@ impl DesktopNotifier {
                 .spawn();
         }
     }
+
+    pub fn notify_text_received(text: &str, sender_name: &str) {
+        info!(text = %text, sender = %sender_name, "Text message received from peer");
+        #[cfg(unix)]
+        {
+            let summary = format!("NOVA-Link: Message from {}", sender_name);
+            let _ = std::process::Command::new("notify-send")
+                .args(["-a", "NOVA-Link", "-u", "normal", &summary, text])
+                .spawn();
+        }
+    }
+
+    pub fn notify_pairing_established(device_name: &str) {
+        info!(device = %device_name, "Pairing successfully established");
+        #[cfg(unix)]
+        {
+            let summary = "NOVA-Link: Device Paired";
+            let body = format!("{} is now paired and trusted.", device_name);
+            let _ = std::process::Command::new("notify-send")
+                .args(["-a", "NOVA-Link", "-u", "normal", summary, &body])
+                .spawn();
+        }
+    }
 }

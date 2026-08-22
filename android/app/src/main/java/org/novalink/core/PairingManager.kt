@@ -41,12 +41,12 @@ class PairingManager(
 
     fun handlePairingResponse(
         response: PairingResponsePayload,
-        localIdentityPk: ByteArray,
-        peerIdentityPk: ByteArray
+        localIdentityPk: ByteArray
     ): String {
         val priv = localEphemeralPriv ?: throw IllegalStateException("Local ephemeral key not initialized")
         val peerEphemeralPk = response.ephemeralPubkey.fromHex()
         val peerNonce = response.nonce.fromHex()
+        val peerIdentityPk = response.identityPubkey.fromHex()
 
         val peerPubParams = X25519PublicKeyParameters(peerEphemeralPk, 0)
         val sharedSecret = ByteArray(32)

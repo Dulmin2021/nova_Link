@@ -142,6 +142,31 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                                             }
                                         }
                                     }
+                                    "pairing_confirm" => {
+                                        use nova_core::protocol::PairingConfirmPayload;
+                                        if let Ok(confirm) = serde_json::from_value::<PairingConfirmPayload>(env.payload) {
+                                            if confirm.accepted {
+                                                info!("================================================");
+                                                info!(">>> NOVA-LINK DEVICE PAIRING ACCEPTED & CONFIRMED <<<");
+                                                info!("================================================");
+                                                DesktopNotifier::notify_pairing_established("Mobile Device");
+                                            }
+                                        }
+                                    }
+                                    "text_share" => {
+                                        use nova_core::protocol::TextSharePayload;
+                                        if let Ok(p) = serde_json::from_value::<TextSharePayload>(env.payload) {
+                                            info!(text = %p.text, "Received text from mobile");
+                                            DesktopNotifier::notify_text_received(&p.text, "Mobile Device");
+                                        }
+                                    }
+                                    "url_share" => {
+                                        use nova_core::protocol::UrlSharePayload;
+                                        if let Ok(p) = serde_json::from_value::<UrlSharePayload>(env.payload) {
+                                            info!(url = %p.url, "Received shared URL from mobile");
+                                            DesktopNotifier::notify_url_received(&p.url, "Mobile Device");
+                                        }
+                                    }
                                     "device_info" => {
                                         if let Ok(info) = serde_json::from_value::<DeviceInfoPayload>(env.payload) {
                                             let mut guard = st.write().await;
