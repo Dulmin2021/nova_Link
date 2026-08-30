@@ -28,16 +28,12 @@ fn main() {
     #[cfg(feature = "gui")]
     {
         use libadwaita::Application;
+        use libadwaita::gio::ApplicationFlags;
         use libadwaita::gio::prelude::{ApplicationExt, ApplicationExtManual};
 
-        let app_id = if std::env::var("SNAP").is_ok() {
-            "snap.nova-link.nova-link"
-        } else {
-            "com.novalink.NovaLink"
-        };
-
         let app = Application::builder()
-            .application_id(app_id)
+            .application_id("com.novalink.NovaLink")
+            .flags(ApplicationFlags::NON_UNIQUE)
             .build();
 
         app.connect_activate(move |app| {
