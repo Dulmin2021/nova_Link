@@ -1,0 +1,56 @@
+name: nova-link
+base: core24
+version: '0.1.0'
+summary: Fast, secure local peer-to-peer file sharing & pairing
+description: |
+  NOVA-Link seamlessly bridges Linux and Android devices over local Wi-Fi and 
+  Tailscale VPN for encrypted file transfer, clipboard synchronization, and URL sharing.
+
+grade: stable
+confinement: strict
+
+apps:
+  nova-link:
+    command: usr/bin/nova-desktop
+    extensions: [gnome]
+    desktop: usr/share/applications/com.novalink.NovaLink.desktop
+    plugs:
+      - network
+      - network-bind
+      - desktop
+      - desktop-legacy
+      - wayland
+      - x11
+      - unity7
+      - home
+      - removable-media
+
+  daemon:
+    command: usr/bin/nova-daemon
+    daemon: simple
+    restart-condition: always
+    plugs:
+      - network
+      - network-bind
+      - home
+
+parts:
+  desktop-entry:
+    plugin: dump
+    source: packaging
+    organize:
+      com.novalink.NovaLink.desktop: usr/share/applications/com.novalink.NovaLink.desktop
+
+  nova-link:
+    plugin: rust
+    source: .
+    build-packages:
+      - libgtk-4-dev
+      - libadwaita-1-dev
+      - libssl-dev
+      - pkg-config
+    stage-packages:
+      - libgtk-4-1
+      - libadwaita-1-0
+    rust-features:
+      - gui
