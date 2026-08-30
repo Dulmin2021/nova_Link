@@ -42,7 +42,7 @@ parts:
       com.novalink.NovaLink.desktop: usr/share/applications/com.novalink.NovaLink.desktop
 
   nova-link:
-    plugin: rust
+    plugin: nil
     source: .
     build-packages:
       - libgtk-4-dev
@@ -52,5 +52,8 @@ parts:
     stage-packages:
       - libgtk-4-1
       - libadwaita-1-0
-    rust-features:
-      - gui
+    override-build: |
+      export PATH="$HOME/.cargo/bin:/usr/local/bin:$PATH"
+      cargo build --release --workspace --features gui
+      install -D -m 755 target/release/nova-desktop $CRAFT_PART_INSTALL/usr/bin/nova-desktop
+      install -D -m 755 target/release/nova-daemon $CRAFT_PART_INSTALL/usr/bin/nova-daemon
