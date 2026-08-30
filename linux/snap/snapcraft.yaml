@@ -14,6 +14,8 @@ apps:
     command: usr/bin/nova-desktop
     extensions: [gnome]
     desktop: usr/share/applications/com.novalink.NovaLink.desktop
+    slots:
+      - dbus-svc
     plugs:
       - network
       - network-bind
@@ -33,6 +35,12 @@ apps:
       - network
       - network-bind
       - home
+
+slots:
+  dbus-svc:
+    interface: dbus
+    bus: session
+    name: com.novalink.NovaLink
 
 parts:
   desktop-entry:
